@@ -1,0 +1,19 @@
+{
+  "appId": "com.jade.cycle",
+  "appName": "Cycle",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "backgroundColor": "#FAF7F2",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#FAF7F2"
+    }
+  }
+}

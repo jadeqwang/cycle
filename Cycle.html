@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Cycle — period tracking app</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700&family=Quicksand:wght@300;400;500;600;700&family=Karla:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --stage-bg: #ECE7DD;
+  }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--stage-bg); overscroll-behavior: none; }
+  body {
+    font-family: 'Quicksand', system-ui, sans-serif;
+    color: #2D2A26;
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(196,146,138,0.18), transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(163,181,166,0.14), transparent 55%),
+      var(--stage-bg);
+  }
+  body.dark { --stage-bg: #14130F; color: #E8E4DE; }
+  body.dark {
+    background:
+      radial-gradient(ellipse at 30% 20%, rgba(196,146,138,0.16), transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(163,181,166,0.08), transparent 55%),
+      var(--stage-bg);
+  }
+  .stage {
+    display: flex; align-items: flex-start; justify-content: center;
+    width: 100%; min-height: 100vh; padding: 32px 24px 48px;
+    box-sizing: border-box;
+  }
+
+  /* animations */
+  @keyframes bloom {
+    0%   { transform: scale(0.3); opacity: 0.55; }
+    60%  { opacity: 0.35; }
+    100% { transform: scale(7); opacity: 0; }
+  }
+  @keyframes slideDate {
+    from { opacity: 0; transform: translateY(2px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes crossFade {
+    from { opacity: 0.0; }
+    to   { opacity: 1; }
+  }
+
+  button:focus-visible { outline: 2px solid #C4928A; outline-offset: 2px; }
+  button { font-family: inherit; }
+
+  /* hide scrollbars in phone frame */
+  [data-cycle-frame] *::-webkit-scrollbar { display: none; }
+  [data-cycle-frame] * { scrollbar-width: none; }
+
+  /* caption under device */
+  .caption {
+    margin-top: 28px; text-align: center;
+    font-family: 'Quicksand', system-ui, sans-serif;
+    font-size: 13px; letter-spacing: 0.6px; text-transform: uppercase;
+    color: rgba(45,42,38,0.45);
+  }
+  body.dark .caption { color: rgba(232,228,222,0.4); }
+</style>
+</head>
+<body>
+  <div id="root" class="stage"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="cycle-app.jsx"></script>
+
+  <script type="text/babel" data-presets="react">
+    const DEFAULTS = /*EDITMODE-BEGIN*/{
+      "scenario": "normal",
+      "dark": false,
+      "accent": "#C4928A",
+      "font": "quicksand",
+      "calSync": true
+    }/*EDITMODE-END*/;
+
+    // accent palettes — keep all the spec roles consistent per choice
+    const ACCENT_PALETTES = {
+      "#C4928A": { accent: "#C4928A", deep: "#A87770", muted: "#E8D5D0" },  // dusty rose (spec)
+      "#A3B5A6": { accent: "#A3B5A6", deep: "#7E9382", muted: "#D8E2DA" },  // sage
+      "#B5A5C4": { accent: "#B5A5C4", deep: "#8E7BA3", muted: "#E2D8EA" },  // lavender
+      "#D4A574": { accent: "#D4A574", deep: "#B0844F", muted: "#EFDCC0" },  // warm amber
+    };
+
+    function App() {
+      const [t, setTweak] = useTweaks(DEFAULTS);
+      React.useEffect(() => {
+        document.body.classList.toggle('dark', !!t.dark);
+      }, [t.dark]);
+
+      const pal = ACCENT_PALETTES[t.accent] || ACCENT_PALETTES["#C4928A"];
+
+      return (
+        <>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <CycleApp
+              scenario={t.scenario}
+              dark={t.dark}
+              calSyncInit={t.calSync}
+              accent={pal.accent}
+              accentDeep={pal.deep}
+              accentMuted={pal.muted}
+              font={t.font}
+            />
+            <div className="caption">Cycle · v1.0</div>
+          </div>
+
+          <TweaksPanel title="Tweaks">
+            <TweakSection label="State">
+              <TweakSelect
+                label="Scenario"
+                value={t.scenario}
+                onChange={(v) => setTweak('scenario', v)}
+                options={[
+                  { value: 'normal',    label: 'Normal · prediction in 8 days' },
+                  { value: 'late',      label: 'Late · expected 2 days ago' },
+                  { value: 'first-log', label: 'One period logged' },
+                  { value: 'empty',     label: 'Empty · first-time user' },
+                ]}
+              />
+            </TweakSection>
+
+            <TweakSection label="Appearance">
+              <TweakToggle label="Dark mode" value={t.dark} onChange={(v) => setTweak('dark', v)} />
+              <TweakColor
+                label="Accent"
+                value={t.accent}
+                onChange={(v) => setTweak('accent', v)}
+                options={["#C4928A", "#A3B5A6", "#B5A5C4", "#D4A574"]}
+              />
+              <TweakRadio
+                label="Typeface"
+                value={t.font}
+                onChange={(v) => setTweak('font', v)}
+                options={[
+                  { value: 'quicksand', label: 'Quicksand' },
+                  { value: 'nunito',    label: 'Nunito' },
+                  { value: 'karla',     label: 'Karla' },
+                ]}
+              />
+            </TweakSection>
+
+            <TweakSection label="Sync">
+              <TweakToggle label="Google Calendar" value={t.calSync} onChange={(v) => setTweak('calSync', v)} />
+            </TweakSection>
+          </TweaksPanel>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

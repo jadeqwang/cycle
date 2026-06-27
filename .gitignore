@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.vite/
+
+# Local environment
+.env
+.env.*
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# Android/Gradle generated files
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/build/
