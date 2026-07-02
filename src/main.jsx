@@ -51,6 +51,7 @@ function App() {
 
   return (
     <CycleApp
+      native={Capacitor.isNativePlatform()}
       initialPeriods={initialPeriods}
       initialCycleLen={stored.cycleLen ?? 27}
       initialCycleMode={stored.cycleMode || 'manual'}

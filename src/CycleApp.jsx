@@ -571,6 +571,7 @@ function Bloom({ c, show, x, y }) {
 
 // ─── main app ──────────────────────────────────────────────────────────────
 function CycleApp({
+  native = false,
   initialPeriods,
   initialCycleLen = 27,
   initialCycleMode = 'manual',
@@ -655,17 +656,25 @@ function CycleApp({
 
   return (
     <div data-cycle-frame style={{
-      width: 384, height: 832, borderRadius: 44, overflow: 'hidden',
+      // On native the real device provides status bar, notch, and gesture
+      // pill — render full-bleed with safe-area padding instead of the
+      // browser-preview phone mockup.
+      width: native ? '100vw' : 384,
+      height: native ? '100dvh' : 832,
+      borderRadius: native ? 0 : 44,
+      border: native ? 'none' : `1.5px solid rgba(0,0,0,0.06)`,
+      boxShadow: native ? 'none' : '0 40px 80px -20px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.06)',
+      paddingTop: native ? 'env(safe-area-inset-top, 24px)' : 0,
+      paddingBottom: native ? 'env(safe-area-inset-bottom, 0px)' : 0,
+      overflow: 'hidden',
       background: c.bg, position: 'relative',
-      border: `1.5px solid rgba(0,0,0,0.06)`,
-      boxShadow: '0 40px 80px -20px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.06)',
       display: 'flex', flexDirection: 'column',
       transition: 'background 320ms ease',
       // CSS vars for fonts
       '--font-display': fontFam,
       '--font-ui': fontFam,
     }}>
-      <StatusBar c={c}/>
+      {!native && <StatusBar c={c}/>}
 
       {/* scroll content */}
       <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
@@ -748,7 +757,8 @@ function CycleApp({
       <button
         onClick={() => setSettingsOpen(true)}
         style={{
-          position: 'absolute', left: '50%', bottom: 44, transform: 'translateX(-50%)',
+          position: 'absolute', left: '50%', transform: 'translateX(-50%)',
+          bottom: native ? 'calc(16px + env(safe-area-inset-bottom, 0px))' : 44,
           display: 'flex', alignItems: 'center', gap: 6,
           background: c.surface, border: 'none',
           padding: '10px 18px', borderRadius: 100,
@@ -759,7 +769,7 @@ function CycleApp({
         <Sliders c={c.textSecondary} s={14}/> Settings
       </button>
 
-      <NavPill c={c}/>
+      {!native && <NavPill c={c}/>}
 
       <SettingsSheet c={c} open={settingsOpen} onClose={() => setSettingsOpen(false)}
         cycleLen={cycleLen} setCycleLen={(v) => { setCycleLen(v); setCycleMode('manual'); }}
