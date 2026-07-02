@@ -93,6 +93,25 @@ Remote model: `period start` / `period end` all-day events on the
 Period Tracker calendar. An entry's `end` event is the first `period end`
 whose date is ≥ start and < next start (and within 14 days of start).
 
+**Recurring-events reality (verified 2026-07-02):** the calendar is NOT
+individual events. It is two infinite recurring series (`period start`
+recurring ~every 25 days, id base `ko036p437p419aej0m5q6m3nf0`;
+`period end` likewise, id base `l09eost9fsakvgdedo8scvhdsh`) whose past
+instances Jade hand-adjusted to real dates. Future instances
+(2026-07-23, 2026-08-17, … into 2028) are projections, not data.
+Consequences, all mandatory:
+- API pulls MUST use `singleEvents=true` and `timeMax = tomorrow` —
+  future-dated events are never pulled and never become entries.
+- Instance ids look like `base_YYYYMMDD` and are individually
+  addressable for PATCH/DELETE; treat them as opaque ids.
+- App-created events are standalone single events, never additions to
+  the recurring series.
+- Jade confirmed the 2026-06-28 start / 2026-07-02 end instances are
+  real data (kept in the seed).
+- Post-launch step for Jade (in setup doc): end both recurring series
+  (edit series → "Ends on" today) so projections stop accumulating;
+  the app's own prediction replaces them.
+
 Each sync run:
 1. **Pull** all events in a window (2 years back → 60 days forward,
    `updatedMin` optimization later if needed). Pair into remote entries.

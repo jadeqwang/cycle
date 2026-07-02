@@ -6,6 +6,10 @@ dist/
 .env
 .env.*
 
+# Personal health data + per-user OAuth config (never commit)
+period-import.json
+src/sync-config.js
+
 # OS/editor noise
 .DS_Store
 Thumbs.db
