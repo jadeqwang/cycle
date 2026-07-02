@@ -67,6 +67,12 @@ function addPeriodEntry(periods, date) {
   if (hasPeriodOn(periods, date)) return periods;
   return [...periods, date].sort((a, b) => a - b);
 }
+function setLastPeriodDate(periods, date) {
+  if (!periods.length) return periods;
+  const rest = periods.slice(0, -1);
+  if (hasPeriodOn(rest, date)) return periods;
+  return [...rest, date].sort((a, b) => a - b);
+}
 
 function weekdayMonthDay(d) {
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
@@ -511,8 +517,20 @@ function Switch({ c, on, onChange }) {
 }
 
 // ─── edit-last modal ───────────────────────────────────────────────────────
-function EditLastModal({ c, open, onClose, last, periodLength, onDelete }) {
+function EditLastModal({ c, open, onClose, last, periodLength, onDelete, onEditDate, minDate, maxDate }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(last);
+  useEffect(() => {
+    if (open) { setEditing(false); setDraft(last); }
+  }, [open, last]);
   if (!open) return null;
+  const canBack = !minDate || diffDays(addDays(draft, -1), minDate) >= 0;
+  const canFwd = diffDays(addDays(draft, 1), maxDate) <= 0;
+  const chevronStyle = (enabled) => ({
+    width: 48, height: 48, borderRadius: 24, border: 'none',
+    background: 'transparent', color: c.textPrimary, opacity: enabled ? 0.85 : 0.25,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: enabled ? 'pointer' : 'default',
+  });
   return (
     <>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(20,18,15,0.4)', zIndex: 40 }} />
@@ -521,12 +539,43 @@ function EditLastModal({ c, open, onClose, last, periodLength, onDelete }) {
         background: c.bg, borderRadius: 22, padding: 24, zIndex: 41,
         boxShadow: '0 30px 60px rgba(0,0,0,0.25)',
       }}>
+        {editing ? (
+          <>
+            <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 500, color: c.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase' }}>Edit date</div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 4 }}>
+              <button onClick={() => canBack && setDraft(addDays(draft, -1))} disabled={!canBack} style={chevronStyle(canBack)}>
+                <ChevronLeft c="currentColor" s={24}/>
+              </button>
+              <div style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.4 }}>{fmt(draft)}</div>
+                <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>{relDays(draft)}</div>
+              </div>
+              <button onClick={() => canFwd && setDraft(addDays(draft, 1))} disabled={!canFwd} style={chevronStyle(canFwd)}>
+                <ChevronRight c="currentColor" s={24}/>
+              </button>
+            </div>
+            <button onClick={() => { onEditDate(draft); onClose(); }} style={{
+              width: '100%', height: 52, marginTop: 18, borderRadius: 14, border: 'none',
+              background: c.accent, color: '#FFFEFB',
+              fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 600, letterSpacing: 0.3, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}>
+              Save <Check c="#FFFEFB" s={16}/>
+            </button>
+            <button onClick={() => { setEditing(false); setDraft(last); }} style={{
+              width: '100%', height: 44, marginTop: 10, border: 'none',
+              background: 'transparent', color: c.textSecondary,
+              fontFamily: 'var(--font-ui)', fontSize: 14, cursor: 'pointer',
+            }}>Cancel</button>
+          </>
+        ) : (
+          <>
         <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 500, color: c.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase' }}>Period entry</div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.4, marginTop: 6 }}>{fmt(last)}</div>
         <div style={{ fontFamily: 'var(--font-ui)', fontSize: 14, color: c.textSecondary, marginTop: 4 }}>{fmtRange(last, periodLength)}</div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
-          <button style={{
+          <button onClick={() => setEditing(true)} style={{
             flex: 1, height: 48, borderRadius: 14, border: `1px solid ${c.hairline}`,
             background: 'transparent', color: c.textPrimary,
             fontFamily: 'var(--font-ui)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
@@ -548,6 +597,8 @@ function EditLastModal({ c, open, onClose, last, periodLength, onDelete }) {
           background: 'transparent', color: c.textSecondary,
           fontFamily: 'var(--font-ui)', fontSize: 14, cursor: 'pointer',
         }}>Cancel</button>
+          </>
+        )}
       </div>
     </>
   );
@@ -782,7 +833,10 @@ function CycleApp({
 
       {last && (
         <EditLastModal c={c} open={editOpen} onClose={() => setEditOpen(false)} last={last} periodLength={periodLen}
-          onDelete={() => { setPeriods(p => p.slice(0, -1)); setEditOpen(false); }}/>
+          onDelete={() => { setPeriods(p => p.slice(0, -1)); setEditOpen(false); }}
+          onEditDate={(date) => setPeriods(p => setLastPeriodDate(p, date))}
+          minDate={periods.length > 1 ? addDays(periods[periods.length - 2], 1) : null}
+          maxDate={addDays(todayBase, 7)}/>
       )}
 
       <Bloom c={c} show={!!bloom} x={bloom?.x} y={bloom?.y}/>
@@ -790,5 +844,5 @@ function CycleApp({
   );
 }
 
-export { LIGHT, DARK, loadStoredState, saveStoredState, hasPeriodOn, addPeriodEntry };
+export { LIGHT, DARK, loadStoredState, saveStoredState, hasPeriodOn, addPeriodEntry, setLastPeriodDate };
 export default CycleApp;
