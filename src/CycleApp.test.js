@@ -2,7 +2,7 @@ import { afterEach, describe, test, expect } from 'vitest';
 import {
   hasPeriodOn, addPeriodEntry, setPeriodDate, setPeriodEnd, removePeriodAt,
   makeEntry, collectEventIds, autoPeriodLen, parseStoredEntry,
-  serializeEntry, loadStoredState, saveStoredState,
+  serializeEntry, buildBackupState, loadStoredState, saveStoredState, mergeImportedPeriods,
 } from './CycleApp.jsx';
 
 const d = (y, m, day) => new Date(y, m - 1, day);
@@ -206,6 +206,211 @@ describe('serializeEntry', () => {
       startEventId: 'start-id',
       endEventId: 'end-id',
       updatedAt: '2026-07-07T00:00:00.000Z',
+    });
+  });
+});
+
+describe('mergeImportedPeriods', () => {
+  test('unions disjoint dates sorted', () => {
+    const existing = [
+      entry(d(2026, 7, 2)),
+      entry(d(2026, 8, 28)),
+    ];
+    const incoming = [
+      entry(d(2026, 6, 3)),
+      entry(d(2026, 7, 30)),
+    ];
+
+    const result = mergeImportedPeriods(existing, incoming);
+
+    expect(result.map(x => x.start.getTime())).toEqual([
+      d(2026, 6, 3),
+      d(2026, 7, 2),
+      d(2026, 7, 30),
+      d(2026, 8, 28),
+    ].map(x => x.getTime()));
+  });
+
+  test('same-date incoming fills missing end and ids', () => {
+    const existing = [
+      entry(d(2026, 7, 2), { updatedAt: '2026-07-03T00:00:00.000Z' }),
+    ];
+    const incoming = [
+      entry(d(2026, 7, 2), {
+        end: d(2026, 7, 6),
+        startEventId: 'start-id',
+        endEventId: 'end-id',
+        updatedAt: '2026-07-02T00:00:00.000Z',
+      }),
+    ];
+
+    const result = mergeImportedPeriods(existing, incoming);
+
+    expect(result).toEqual([
+      entry(d(2026, 7, 2), {
+        end: d(2026, 7, 6),
+        startEventId: 'start-id',
+        endEventId: 'end-id',
+        updatedAt: '2026-07-03T00:00:00.000Z',
+      }),
+    ]);
+  });
+
+  test('newer incoming id conflicts replace existing ids', () => {
+    const existing = [
+      entry(d(2026, 7, 2), {
+        startEventId: 'old-start-id',
+        endEventId: 'old-end-id',
+        updatedAt: '2026-07-03T00:00:00.000Z',
+      }),
+    ];
+    const incoming = [
+      entry(d(2026, 7, 2), {
+        startEventId: 'new-start-id',
+        endEventId: 'new-end-id',
+        updatedAt: '2026-07-04T00:00:00.000Z',
+      }),
+    ];
+
+    const result = mergeImportedPeriods(existing, incoming);
+
+    expect(result[0].startEventId).toBe('new-start-id');
+    expect(result[0].endEventId).toBe('new-end-id');
+  });
+
+  test('older incoming id conflicts keep existing ids', () => {
+    const existing = [
+      entry(d(2026, 7, 2), {
+        startEventId: 'existing-start-id',
+        endEventId: 'existing-end-id',
+        updatedAt: '2026-07-04T00:00:00.000Z',
+      }),
+    ];
+    const incoming = [
+      entry(d(2026, 7, 2), {
+        startEventId: 'older-start-id',
+        endEventId: 'older-end-id',
+        updatedAt: '2026-07-03T00:00:00.000Z',
+      }),
+    ];
+
+    const result = mergeImportedPeriods(existing, incoming);
+
+    expect(result[0].startEventId).toBe('existing-start-id');
+    expect(result[0].endEventId).toBe('existing-end-id');
+  });
+
+  test('incoming fills missing ids', () => {
+    const existing = [
+      entry(d(2026, 7, 2), {
+        startEventId: null,
+        endEventId: null,
+        updatedAt: '2026-07-04T00:00:00.000Z',
+      }),
+    ];
+    const incoming = [
+      entry(d(2026, 7, 2), {
+        startEventId: 'start-id',
+        endEventId: 'end-id',
+        updatedAt: '2026-07-03T00:00:00.000Z',
+      }),
+    ];
+
+    const result = mergeImportedPeriods(existing, incoming);
+
+    expect(result[0].startEventId).toBe('start-id');
+    expect(result[0].endEventId).toBe('end-id');
+  });
+
+  test('same-date conflict newer updatedAt wins per entry', () => {
+    const existing = [
+      entry(d(2026, 7, 2), {
+        end: d(2026, 7, 5),
+        updatedAt: '2026-07-05T00:00:00.000Z',
+      }),
+      entry(d(2026, 7, 30), {
+        end: d(2026, 8, 2),
+        updatedAt: '2026-08-03T00:00:00.000Z',
+      }),
+    ];
+    const incoming = [
+      entry(d(2026, 7, 2), {
+        end: d(2026, 7, 6),
+        updatedAt: '2026-07-06T00:00:00.000Z',
+      }),
+      entry(d(2026, 7, 30), {
+        end: d(2026, 8, 3),
+        updatedAt: '2026-08-02T00:00:00.000Z',
+      }),
+    ];
+
+    const result = mergeImportedPeriods(existing, incoming);
+
+    expect(result[0].end.getTime()).toBe(d(2026, 7, 6).getTime());
+    expect(result[0].updatedAt).toBe('2026-07-06T00:00:00.000Z');
+    expect(result[1].end.getTime()).toBe(d(2026, 8, 2).getTime());
+    expect(result[1].updatedAt).toBe('2026-08-03T00:00:00.000Z');
+  });
+
+  test('never removes existing entries', () => {
+    const existing = [
+      entry(d(2026, 7, 2)),
+      entry(d(2026, 7, 30)),
+    ];
+    const incoming = [
+      entry(d(2026, 7, 2), { end: d(2026, 7, 6) }),
+    ];
+
+    const result = mergeImportedPeriods(existing, incoming);
+
+    expect(result.map(x => x.start.getTime())).toEqual([
+      d(2026, 7, 2),
+      d(2026, 7, 30),
+    ].map(x => x.getTime()));
+  });
+});
+
+describe('buildBackupState', () => {
+  test('serializes full schema v2 backup metadata', () => {
+    const backup = buildBackupState({
+      periods: [
+        entry(d(2026, 7, 2), {
+          end: d(2026, 7, 6),
+          startEventId: 'start-id',
+          endEventId: 'end-id',
+        }),
+      ],
+      deletedEventIds: ['gone-id'],
+      lastSyncedAt: '2026-07-07T00:00:00.000Z',
+      cycleLen: 29,
+      cycleMode: 'auto',
+      periodLen: 6,
+      periodMode: 'manual',
+      calSync: true,
+      dark: true,
+      accent: '#123456',
+      font: 'karla',
+    });
+
+    expect(backup).toEqual({
+      schema: 2,
+      periods: [{
+        start: '2026-07-02',
+        end: '2026-07-06',
+        startEventId: 'start-id',
+        endEventId: 'end-id',
+        updatedAt: '2026-01-01T00:00:00Z',
+      }],
+      deletedEventIds: ['gone-id'],
+      lastSyncedAt: '2026-07-07T00:00:00.000Z',
+      cycleLen: 29,
+      cycleMode: 'auto',
+      periodLen: 6,
+      periodMode: 'manual',
+      calSync: true,
+      dark: true,
+      accent: '#123456',
+      font: 'karla',
     });
   });
 });

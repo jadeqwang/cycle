@@ -2,6 +2,8 @@
 // Calm, breathing-paced UI. Earth-and-water palette.
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
 
 // ─── palette (from spec §7) ────────────────────────────────────────────────
 const LIGHT = {
@@ -173,6 +175,64 @@ function serializeEntry(entry) {
     endEventId: entry.endEventId || null,
     updatedAt: entry.updatedAt,
   };
+}
+
+function buildBackupState(state) {
+  return {
+    schema: 2,
+    periods: state.periods.map(serializeEntry),
+    deletedEventIds: state.deletedEventIds || [],
+    lastSyncedAt: typeof state.lastSyncedAt === 'string' ? state.lastSyncedAt : null,
+    cycleLen: state.cycleLen,
+    cycleMode: state.cycleMode,
+    periodLen: state.periodLen,
+    periodMode: state.periodMode,
+    calSync: !!state.calSync,
+    dark: !!state.dark,
+    accent: state.accent,
+    font: state.font,
+  };
+}
+
+function mergeIdField(currentId, incomingId, newerIncoming) {
+  if (currentId === null || currentId === undefined) return incomingId;
+  if (incomingId === null || incomingId === undefined) return currentId;
+  if (currentId !== incomingId && newerIncoming) return incomingId;
+  return currentId;
+}
+
+function mergeImportedPeriods(existing, incoming) {
+  const out = [...existing];
+  for (const inc of incoming) {
+    const i = out.findIndex(e => diffDays(e.start, inc.start) === 0);
+    if (i === -1) { out.push(inc); continue; }
+    const cur = out[i];
+    const newerIncoming = inc.updatedAt > cur.updatedAt;
+    out[i] = {
+      ...cur,
+      end: cur.end && inc.end ? (newerIncoming ? inc.end : cur.end) : (cur.end || inc.end),
+      startEventId: mergeIdField(cur.startEventId, inc.startEventId, newerIncoming),
+      endEventId: mergeIdField(cur.endEventId, inc.endEventId, newerIncoming),
+      updatedAt: newerIncoming ? inc.updatedAt : cur.updatedAt,
+    };
+  }
+  return sortEntries(out);
+}
+
+function downloadJsonBackup(json) {
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  try {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'cycle-backup.json';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 function loadStoredState() {
@@ -473,7 +533,7 @@ function StepperRow({ c, label, value, setValue, mode, setMode, min, max }) {
   );
 }
 
-function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, setCycleMode, periodLen, setPeriodLen, periodMode, setPeriodMode, calSync, setCalSync, calAccount }) {
+function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, setCycleMode, periodLen, setPeriodLen, periodMode, setPeriodMode, calSync, setCalSync, calAccount, onExport, onImportOpen }) {
   return (
     <>
       <div
@@ -536,7 +596,7 @@ function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, set
           </div>
 
           {/* export */}
-          <button style={{
+          <button onClick={onExport} style={{
             width: '100%', textAlign: 'left',
             background: 'transparent', border: 'none', padding: '18px 0',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
@@ -544,7 +604,20 @@ function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, set
           }}>
             <div>
               <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.textPrimary }}>Export data</div>
-              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>CSV to Google Sheets</div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>JSON backup</div>
+            </div>
+            <ChevronRight c={c.textFaint} s={18}/>
+          </button>
+
+          <button onClick={onImportOpen} style={{
+            width: '100%', textAlign: 'left',
+            background: 'transparent', border: 'none', padding: '18px 0',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+            borderBottom: `1px solid ${c.hairline}`,
+          }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.textPrimary }}>Import data</div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>Paste a JSON backup</div>
             </div>
             <ChevronRight c={c.textFaint} s={18}/>
           </button>
@@ -578,6 +651,76 @@ function Switch({ c, on, onChange }) {
         transition: 'left 240ms cubic-bezier(0.32, 0.72, 0, 1)',
       }} />
     </button>
+  );
+}
+
+function ImportModal({ c, open, onClose, onImport }) {
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (open) {
+      setText('');
+      setError('');
+    }
+  }, [open]);
+  if (!open) return null;
+
+  const handleImport = () => {
+    try {
+      const parsed = JSON.parse(text);
+      const list = Array.isArray(parsed) ? parsed : parsed?.periods;
+      if (!Array.isArray(list)) throw new Error('invalid backup');
+      const entries = list.map(parseStoredEntry).filter(Boolean);
+      if (!entries.length) throw new Error('invalid backup');
+      onImport(entries);
+      onClose();
+    } catch {
+      setError("Couldn't read that — paste the full JSON backup.");
+    }
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(20,18,15,0.4)', zIndex: 50 }} />
+      <div style={{
+        position: 'absolute', left: 24, right: 24, top: '22%',
+        background: c.bg, borderRadius: 22, padding: 24, zIndex: 51,
+        boxShadow: '0 30px 60px rgba(0,0,0,0.25)',
+      }}>
+        <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 500, color: c.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase' }}>Import data</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.3, marginTop: 6 }}>JSON backup</div>
+        <textarea
+          value={text}
+          onChange={(event) => { setText(event.target.value); setError(''); }}
+          spellCheck={false}
+          style={{
+            width: '100%', minHeight: 190, marginTop: 18, boxSizing: 'border-box',
+            borderRadius: 14, border: `1px solid ${error ? c.accentDeep : c.hairline}`,
+            background: c.surface, color: c.textPrimary, padding: 14, resize: 'vertical',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+            fontSize: 12, lineHeight: 1.45, outline: 'none',
+          }}
+        />
+        {error && (
+          <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.accentDeep, marginTop: 10, lineHeight: 1.4 }}>
+            {error}
+          </div>
+        )}
+        <button onClick={handleImport} style={{
+          width: '100%', height: 52, marginTop: 18, borderRadius: 14, border: 'none',
+          background: c.accent, color: '#FFFEFB',
+          fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 600, letterSpacing: 0.3, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          Import <Check c="#FFFEFB" s={16}/>
+        </button>
+        <button onClick={onClose} style={{
+          width: '100%', height: 44, marginTop: 10, border: 'none',
+          background: 'transparent', color: c.textSecondary,
+          fontFamily: 'var(--font-ui)', fontSize: 14, cursor: 'pointer',
+        }}>Cancel</button>
+      </div>
+    </>
   );
 }
 
@@ -767,6 +910,7 @@ function CycleApp({
   const [logOffset, setLogOffset] = useState(0);
   const [bloom, setBloom] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editIndex, setEditIndex] = useState(null);
   const [unsynced, setUnsynced] = useState(false);
   const buttonRef = useRef(null);
@@ -810,6 +954,39 @@ function CycleApp({
     }
     setTimeout(() => setBloom(null), 1200);
     if (calSync) { setUnsynced(true); setTimeout(() => setUnsynced(false), 2400); }
+  };
+
+  const handleExport = async () => {
+    const json = JSON.stringify(buildBackupState({
+      periods,
+      deletedEventIds,
+      lastSyncedAt: initialLastSyncedAt,
+      cycleLen,
+      cycleMode,
+      periodLen,
+      periodMode,
+      calSync,
+      dark,
+      accent,
+      font,
+    }), null, 2);
+    if (Capacitor.isNativePlatform()) {
+      await Share.share({ title: 'Cycle data', text: json }).catch(() => {});
+    } else {
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(json);
+          return;
+        }
+      } catch {
+        // Fall through to a file download so the user still gets a backup.
+      }
+      try {
+        downloadJsonBackup(json);
+      } catch {
+        // Export is best-effort on locked-down browsers and webviews.
+      }
+    }
   };
 
   // history rows (newest first), with cycle length to previous logged
@@ -951,7 +1128,12 @@ function CycleApp({
         periodMode={periodMode} setPeriodMode={setPeriodMode}
         calSync={calSync} setCalSync={setCalSync}
         calAccount="cycle.user@gmail.com"
+        onExport={handleExport}
+        onImportOpen={() => { setSettingsOpen(false); setImportOpen(true); }}
       />
+
+      <ImportModal c={c} open={importOpen} onClose={() => setImportOpen(false)}
+        onImport={(entries) => setPeriods(p => mergeImportedPeriods(p, entries))}/>
 
       {editIndex !== null && periods[editIndex] && (
         <EditLastModal c={c} open onClose={() => setEditIndex(null)} entry={periods[editIndex]} periodLength={periodLen}
@@ -976,5 +1158,6 @@ export {
   LIGHT, DARK, loadStoredState, saveStoredState, makeEntry, hasPeriodOn,
   addPeriodEntry, setPeriodDate, setPeriodEnd, removePeriodAt, collectEventIds,
   autoPeriodLen, parseStoredEntry, serializeEntry,
+  buildBackupState, mergeImportedPeriods,
 };
 export default CycleApp;
