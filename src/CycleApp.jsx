@@ -60,24 +60,6 @@ function relDays(target, base = startOfToday()) {
   return `${-d} days ago`;
 }
 
-function hasPeriodOn(periods, date) {
-  return periods.some(p => diffDays(p, date) === 0);
-}
-function addPeriodEntry(periods, date) {
-  if (hasPeriodOn(periods, date)) return periods;
-  return [...periods, date].sort((a, b) => a - b);
-}
-function setPeriodDate(periods, index, date) {
-  if (index < 0 || index >= periods.length) return periods;
-  const rest = periods.filter((_, i) => i !== index);
-  if (hasPeriodOn(rest, date)) return periods;
-  return [...rest, date].sort((a, b) => a - b);
-}
-function removePeriodAt(periods, index) {
-  if (index < 0 || index >= periods.length) return periods;
-  return periods.filter((_, i) => i !== index);
-}
-
 function weekdayMonthDay(d) {
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 }
@@ -88,9 +70,109 @@ function serializeDate(d) {
 
 function parseStoredDate(value) {
   if (!value || typeof value !== 'string') return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return date;
+}
+
+function nowIsoAfter(previous) {
+  const now = new Date();
+  const previousTime = Date.parse(previous);
+  if (Number.isFinite(previousTime) && now.getTime() <= previousTime) {
+    return new Date(previousTime + 1).toISOString();
+  }
+  return now.toISOString();
+}
+
+function makeEntry(start) {
+  return {
+    start,
+    end: null,
+    startEventId: null,
+    endEventId: null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function sortEntries(entries) {
+  return [...entries].sort((a, b) => a.start - b.start);
+}
+
+function hasPeriodOn(entries, date) {
+  return entries.some(entry => diffDays(entry.start, date) === 0);
+}
+
+function addPeriodEntry(entries, date) {
+  if (hasPeriodOn(entries, date)) return entries;
+  return sortEntries([...entries, makeEntry(date)]);
+}
+
+function setPeriodDate(entries, index, date) {
+  if (index < 0 || index >= entries.length) return entries;
+  const rest = entries.filter((_, i) => i !== index);
+  if (hasPeriodOn(rest, date)) return entries;
+  const current = entries[index];
+  return sortEntries([
+    ...rest,
+    { ...current, start: date, updatedAt: nowIsoAfter(current.updatedAt) },
+  ]);
+}
+
+function setPeriodEnd(entries, index, end) {
+  if (index < 0 || index >= entries.length) return entries;
+  return entries.map((entry, i) => (
+    i === index ? { ...entry, end: end || null, updatedAt: nowIsoAfter(entry.updatedAt) } : entry
+  ));
+}
+
+function removePeriodAt(entries, index) {
+  if (index < 0 || index >= entries.length) return entries;
+  return entries.filter((_, i) => i !== index);
+}
+
+function collectEventIds(entry) {
+  return [entry.startEventId, entry.endEventId].filter(id => id !== null && id !== undefined);
+}
+
+function autoPeriodLen(entries) {
+  const lengths = sortEntries(entries)
+    .filter(entry => entry.end)
+    .slice(-5)
+    .map(entry => diffDays(entry.end, entry.start) + 1)
+    .sort((a, b) => a - b);
+  if (!lengths.length) return null;
+  return lengths[Math.floor(lengths.length / 2)];
+}
+
+function parseStoredEntry(raw) {
+  if (typeof raw === 'string') {
+    const start = parseStoredDate(raw);
+    return start ? makeEntry(start) : null;
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const start = parseStoredDate(raw.start);
+  if (!start) return null;
+  const end = parseStoredDate(raw.end);
+  return {
+    start,
+    end,
+    startEventId: typeof raw.startEventId === 'string' ? raw.startEventId : null,
+    endEventId: typeof raw.endEventId === 'string' ? raw.endEventId : null,
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(),
+  };
+}
+
+function serializeEntry(entry) {
+  return {
+    start: serializeDate(entry.start),
+    end: entry.end ? serializeDate(entry.end) : null,
+    startEventId: entry.startEventId || null,
+    endEventId: entry.endEventId || null,
+    updatedAt: entry.updatedAt,
+  };
 }
 
 function loadStoredState() {
@@ -99,7 +181,7 @@ function loadStoredState() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return {
-      periods: Array.isArray(parsed.periods) ? parsed.periods.map(parseStoredDate).filter(Boolean) : [],
+      periods: Array.isArray(parsed.periods) ? sortEntries(parsed.periods.map(parseStoredEntry).filter(Boolean)) : [],
       cycleLen: Number.isFinite(parsed.cycleLen) ? parsed.cycleLen : 27,
       cycleMode: parsed.cycleMode === 'auto' ? 'auto' : 'manual',
       periodLen: Number.isFinite(parsed.periodLen) ? parsed.periodLen : 5,
@@ -108,6 +190,8 @@ function loadStoredState() {
       dark: !!parsed.dark,
       accent: parsed.accent || '#C4928A',
       font: parsed.font || 'quicksand',
+      deletedEventIds: Array.isArray(parsed.deletedEventIds) ? parsed.deletedEventIds.filter(id => typeof id === 'string') : [],
+      lastSyncedAt: typeof parsed.lastSyncedAt === 'string' ? parsed.lastSyncedAt : null,
     };
   } catch {
     return null;
@@ -118,37 +202,14 @@ function saveStoredState(state) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
       ...state,
-      periods: state.periods.map(serializeDate),
+      schema: 2,
+      periods: state.periods.map(serializeEntry),
+      deletedEventIds: Array.isArray(state.deletedEventIds) ? state.deletedEventIds : [],
+      lastSyncedAt: typeof state.lastSyncedAt === 'string' ? state.lastSyncedAt : null,
     }));
   } catch {
     // Storage can be unavailable in private browsing or locked-down webviews.
   }
-}
-
-// ─── presets (state scenarios for tweaks) ──────────────────────────────────
-function scenarioPeriods(scenario) {
-  // returns array of period start dates, oldest first
-  const T = startOfToday();
-  if (scenario === 'empty') return [];
-  if (scenario === 'late') {
-    // last logged was 29 days ago; cycle=27 → predicted 2 days ago
-    return [
-      addDays(T, -29 - 26 - 28),
-      addDays(T, -29 - 26),
-      addDays(T, -29),
-    ];
-  }
-  if (scenario === 'first-log') {
-    return [addDays(T, -85 - 27 - 26)];
-  }
-  // normal: last logged 19 days ago; cycle=27 → predicted in 8 days (May 24)
-  return [
-    addDays(T, -19 - 28 - 27 - 26),
-    addDays(T, -19 - 28 - 27),
-    addDays(T, -19 - 28),
-    addDays(T, -19 - 27),
-    addDays(T, -19),
-  ];
 }
 
 // ─── icons ─────────────────────────────────────────────────────────────────
@@ -667,16 +728,16 @@ function CycleApp({
   useEffect(() => {
     if (cycleMode !== 'auto') return;
     if (periods.length < 2) { setCycleLen(27); return; }
-    const sorted = [...periods].sort((a,b) => a - b);
+    const sorted = sortEntries(periods);
     const gaps = [];
-    for (let i = 1; i < sorted.length; i++) gaps.push(diffDays(sorted[i], sorted[i-1]));
+    for (let i = 1; i < sorted.length; i++) gaps.push(diffDays(sorted[i].start, sorted[i-1].start));
     const recent = gaps.slice(-5);
     recent.sort((a,b) => a-b);
     const med = recent[Math.floor(recent.length/2)];
     setCycleLen(Math.round(med));
   }, [periods, cycleMode]);
 
-  const last = periods.length ? periods[periods.length - 1] : null;
+  const last = periods.length ? periods[periods.length - 1].start : null;
   const next = last ? addDays(last, cycleLen) : null;
   const late = next ? diffDays(next, todayBase) < 0 : false;
   const empty = !last;
@@ -697,9 +758,9 @@ function CycleApp({
 
   // history rows (newest first), with cycle length to previous logged
   const historyRows = useMemo(() => {
-    const sorted = [...periods].sort((a,b) => a - b);
-    return sorted.map((d, i) => ({
-      date: d, idx: i, gap: i > 0 ? diffDays(d, sorted[i-1]) : null,
+    const sorted = sortEntries(periods);
+    return sorted.map((entry, i) => ({
+      date: entry.start, idx: periods.indexOf(entry), gap: i > 0 ? diffDays(entry.start, sorted[i-1].start) : null,
     })).reverse();
   }, [periods]);
 
@@ -837,11 +898,11 @@ function CycleApp({
       />
 
       {editIndex !== null && periods[editIndex] && (
-        <EditLastModal c={c} open onClose={() => setEditIndex(null)} last={periods[editIndex]} periodLength={periodLen}
+        <EditLastModal c={c} open onClose={() => setEditIndex(null)} last={periods[editIndex].start} periodLength={periodLen}
           onDelete={() => { setPeriods(p => removePeriodAt(p, editIndex)); setEditIndex(null); }}
           onEditDate={(date) => setPeriods(p => setPeriodDate(p, editIndex, date))}
-          minDate={editIndex > 0 ? addDays(periods[editIndex - 1], 1) : null}
-          maxDate={editIndex < periods.length - 1 ? addDays(periods[editIndex + 1], -1) : addDays(todayBase, 7)}/>
+          minDate={editIndex > 0 ? addDays(periods[editIndex - 1].start, 1) : null}
+          maxDate={editIndex < periods.length - 1 ? addDays(periods[editIndex + 1].start, -1) : addDays(todayBase, 7)}/>
       )}
 
       <Bloom c={c} show={!!bloom} x={bloom?.x} y={bloom?.y}/>
@@ -849,5 +910,9 @@ function CycleApp({
   );
 }
 
-export { LIGHT, DARK, loadStoredState, saveStoredState, hasPeriodOn, addPeriodEntry, setPeriodDate, removePeriodAt };
+export {
+  LIGHT, DARK, loadStoredState, saveStoredState, makeEntry, hasPeriodOn,
+  addPeriodEntry, setPeriodDate, setPeriodEnd, removePeriodAt, collectEventIds,
+  autoPeriodLen, parseStoredEntry, serializeEntry,
+};
 export default CycleApp;
