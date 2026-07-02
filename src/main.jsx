@@ -57,6 +57,8 @@ function App() {
       initialCycleMode={stored.cycleMode || 'manual'}
       initialPeriodLen={stored.periodLen ?? 5}
       initialPeriodMode={stored.periodMode || 'manual'}
+      initialDeletedEventIds={stored.deletedEventIds || []}
+      initialLastSyncedAt={stored.lastSyncedAt ?? null}
       dark={appearance.dark}
       calSyncInit={stored.calSync ?? false}
       accent={palette.accent}

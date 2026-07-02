@@ -372,14 +372,14 @@ function LastBlock({ c, last, periodLength, onOpen, empty }) {
         <>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.6 }}>
-              {fmt(last)}
+              {fmt(last.start)}
             </div>
             <div style={{ fontFamily: 'var(--font-ui)', fontSize: 14, color: c.textSecondary }}>
-              {relDays(last)}
+              {relDays(last.start)}
             </div>
           </div>
           <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textFaint, marginTop: 6 }}>
-            {fmtRange(last, periodLength)} · {periodLength} days
+            {last.end ? `${fmtRange(last.start, diffDays(last.end, last.start) + 1)} · ${diffDays(last.end, last.start) + 1} days` : `${fmtRange(last.start, periodLength)} · ${periodLength} days`}
           </div>
         </>
       )}
@@ -582,12 +582,12 @@ function Switch({ c, on, onChange }) {
 }
 
 // ─── edit-last modal ───────────────────────────────────────────────────────
-function EditLastModal({ c, open, onClose, last, periodLength, onDelete, onEditDate, minDate, maxDate }) {
+function EditLastModal({ c, open, onClose, entry, periodLength, onDelete, onEditDate, onEditEnd, minDate, maxDate }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(last);
+  const [draft, setDraft] = useState(entry.start);
   useEffect(() => {
-    if (open) { setEditing(false); setDraft(last); }
-  }, [open, last]);
+    if (open) { setEditing(false); setDraft(entry.start); }
+  }, [open, entry]);
   if (!open) return null;
   const canBack = !minDate || diffDays(addDays(draft, -1), minDate) >= 0;
   const canFwd = diffDays(addDays(draft, 1), maxDate) <= 0;
@@ -627,7 +627,7 @@ function EditLastModal({ c, open, onClose, last, periodLength, onDelete, onEditD
             }}>
               Save <Check c="#FFFEFB" s={16}/>
             </button>
-            <button onClick={() => { setEditing(false); setDraft(last); }} style={{
+            <button onClick={() => { setEditing(false); setDraft(entry.start); }} style={{
               width: '100%', height: 44, marginTop: 10, border: 'none',
               background: 'transparent', color: c.textSecondary,
               fontFamily: 'var(--font-ui)', fontSize: 14, cursor: 'pointer',
@@ -636,8 +636,8 @@ function EditLastModal({ c, open, onClose, last, periodLength, onDelete, onEditD
         ) : (
           <>
         <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 500, color: c.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase' }}>Period entry</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.4, marginTop: 6 }}>{fmt(last)}</div>
-        <div style={{ fontFamily: 'var(--font-ui)', fontSize: 14, color: c.textSecondary, marginTop: 4 }}>{fmtRange(last, periodLength)}</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.4, marginTop: 6 }}>{fmt(entry.start)}</div>
+        <div style={{ fontFamily: 'var(--font-ui)', fontSize: 14, color: c.textSecondary, marginTop: 4 }}>{fmtRange(entry.start, periodLength)}</div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
           <button onClick={() => setEditing(true)} style={{
@@ -693,6 +693,8 @@ function CycleApp({
   initialCycleMode = 'manual',
   initialPeriodLen = 5,
   initialPeriodMode = 'manual',
+  initialDeletedEventIds = [],
+  initialLastSyncedAt = null,
   dark = false,
   calSyncInit = false,
   accent = '#C4928A',
@@ -707,6 +709,7 @@ function CycleApp({
   const c = useMemo(() => ({ ...baseC, accent, accentDeep, accentMuted }), [baseC, accent, accentDeep, accentMuted]);
 
   const [periods, setPeriods] = useState(() => initialPeriods || []);
+  const [deletedEventIds, setDeletedEventIds] = useState(() => initialDeletedEventIds || []);
 
   const [cycleLen, setCycleLen] = useState(initialCycleLen);
   const [cycleMode, setCycleMode] = useState(initialCycleMode);
@@ -721,8 +724,8 @@ function CycleApp({
   const buttonRef = useRef(null);
 
   useEffect(() => {
-    onSettingsChange?.({ periods, cycleLen, cycleMode, periodLen, periodMode, calSync });
-  }, [periods, cycleLen, cycleMode, periodLen, periodMode, calSync, onSettingsChange]);
+    onSettingsChange?.({ periods, deletedEventIds, lastSyncedAt: initialLastSyncedAt, cycleLen, cycleMode, periodLen, periodMode, calSync });
+  }, [periods, deletedEventIds, initialLastSyncedAt, cycleLen, cycleMode, periodLen, periodMode, calSync, onSettingsChange]);
 
   // auto-compute cycle len when in auto mode
   useEffect(() => {
@@ -737,8 +740,13 @@ function CycleApp({
     setCycleLen(Math.round(med));
   }, [periods, cycleMode]);
 
-  const last = periods.length ? periods[periods.length - 1].start : null;
-  const next = last ? addDays(last, cycleLen) : null;
+  useEffect(() => {
+    if (periodMode !== 'auto') return;
+    setPeriodLen(autoPeriodLen(periods) ?? 5);
+  }, [periods, periodMode]);
+
+  const last = periods.length ? periods[periods.length - 1] : null;
+  const next = last ? addDays(last.start, cycleLen) : null;
   const late = next ? diffDays(next, todayBase) < 0 : false;
   const empty = !last;
 
@@ -760,7 +768,7 @@ function CycleApp({
   const historyRows = useMemo(() => {
     const sorted = sortEntries(periods);
     return sorted.map((entry, i) => ({
-      date: entry.start, idx: periods.indexOf(entry), gap: i > 0 ? diffDays(entry.start, sorted[i-1].start) : null,
+      entry, idx: periods.indexOf(entry), gap: i > 0 ? diffDays(entry.start, sorted[i-1].start) : null,
     })).reverse();
   }, [periods]);
 
@@ -851,7 +859,7 @@ function CycleApp({
                 }}>
                   <div>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.2 }}>
-                      {fmtShort(r.date)}, {r.date.getFullYear()}
+                      {fmtShort(r.entry.start)}, {r.entry.start.getFullYear()}
                     </div>
                   </div>
                   {r.gap ? (
@@ -898,9 +906,15 @@ function CycleApp({
       />
 
       {editIndex !== null && periods[editIndex] && (
-        <EditLastModal c={c} open onClose={() => setEditIndex(null)} last={periods[editIndex].start} periodLength={periodLen}
-          onDelete={() => { setPeriods(p => removePeriodAt(p, editIndex)); setEditIndex(null); }}
+        <EditLastModal c={c} open onClose={() => setEditIndex(null)} entry={periods[editIndex]} periodLength={periodLen}
+          onDelete={() => {
+            const ids = collectEventIds(periods[editIndex]);
+            if (ids.length) setDeletedEventIds(existing => [...existing, ...ids]);
+            setPeriods(p => removePeriodAt(p, editIndex));
+            setEditIndex(null);
+          }}
           onEditDate={(date) => setPeriods(p => setPeriodDate(p, editIndex, date))}
+          onEditEnd={(end) => setPeriods(p => setPeriodEnd(p, editIndex, end))}
           minDate={editIndex > 0 ? addDays(periods[editIndex - 1].start, 1) : null}
           maxDate={editIndex < periods.length - 1 ? addDays(periods[editIndex + 1].start, -1) : addDays(todayBase, 7)}/>
       )}
