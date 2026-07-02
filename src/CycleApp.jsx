@@ -67,11 +67,15 @@ function addPeriodEntry(periods, date) {
   if (hasPeriodOn(periods, date)) return periods;
   return [...periods, date].sort((a, b) => a - b);
 }
-function setLastPeriodDate(periods, date) {
-  if (!periods.length) return periods;
-  const rest = periods.slice(0, -1);
+function setPeriodDate(periods, index, date) {
+  if (index < 0 || index >= periods.length) return periods;
+  const rest = periods.filter((_, i) => i !== index);
   if (hasPeriodOn(rest, date)) return periods;
   return [...rest, date].sort((a, b) => a - b);
+}
+function removePeriodAt(periods, index) {
+  if (index < 0 || index >= periods.length) return periods;
+  return periods.filter((_, i) => i !== index);
 }
 
 function weekdayMonthDay(d) {
@@ -651,7 +655,7 @@ function CycleApp({
   const [logOffset, setLogOffset] = useState(0);
   const [bloom, setBloom] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
+  const [editIndex, setEditIndex] = useState(null);
   const [unsynced, setUnsynced] = useState(false);
   const buttonRef = useRef(null);
 
@@ -695,7 +699,7 @@ function CycleApp({
   const historyRows = useMemo(() => {
     const sorted = [...periods].sort((a,b) => a - b);
     return sorted.map((d, i) => ({
-      date: d, gap: i > 0 ? diffDays(d, sorted[i-1]) : null,
+      date: d, idx: i, gap: i > 0 ? diffDays(d, sorted[i-1]) : null,
     })).reverse();
   }, [periods]);
 
@@ -754,7 +758,7 @@ function CycleApp({
 
         {/* three blocks */}
         <div style={{ padding: '16px 20px 0', display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <LastBlock c={c} last={last} periodLength={periodLen} onOpen={() => !empty && setEditOpen(true)} empty={empty}/>
+          <LastBlock c={c} last={last} periodLength={periodLen} onOpen={() => !empty && setEditIndex(periods.length - 1)} empty={empty}/>
           <NextBlock c={c} next={next} late={late} empty={empty}/>
           <div ref={buttonRef}>
             <LogButton c={c} offset={logOffset} setOffset={setLogOffset} onConfirm={handleConfirm}
@@ -779,7 +783,8 @@ function CycleApp({
           ) : (
             <div>
               {historyRows.map((r, i) => (
-                <div key={i} style={{
+                <button key={i} onClick={() => setEditIndex(r.idx)} style={{
+                  width: '100%', border: 'none', background: 'transparent', textAlign: 'left', cursor: 'pointer',
                   display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
                   padding: '14px 0', borderBottom: i < historyRows.length - 1 ? `1px solid ${c.hairline}` : 'none',
                 }}>
@@ -795,7 +800,7 @@ function CycleApp({
                   ) : (
                     <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textFaint }}>—</div>
                   )}
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -831,12 +836,12 @@ function CycleApp({
         calAccount="cycle.user@gmail.com"
       />
 
-      {last && (
-        <EditLastModal c={c} open={editOpen} onClose={() => setEditOpen(false)} last={last} periodLength={periodLen}
-          onDelete={() => { setPeriods(p => p.slice(0, -1)); setEditOpen(false); }}
-          onEditDate={(date) => setPeriods(p => setLastPeriodDate(p, date))}
-          minDate={periods.length > 1 ? addDays(periods[periods.length - 2], 1) : null}
-          maxDate={addDays(todayBase, 7)}/>
+      {editIndex !== null && periods[editIndex] && (
+        <EditLastModal c={c} open onClose={() => setEditIndex(null)} last={periods[editIndex]} periodLength={periodLen}
+          onDelete={() => { setPeriods(p => removePeriodAt(p, editIndex)); setEditIndex(null); }}
+          onEditDate={(date) => setPeriods(p => setPeriodDate(p, editIndex, date))}
+          minDate={editIndex > 0 ? addDays(periods[editIndex - 1], 1) : null}
+          maxDate={editIndex < periods.length - 1 ? addDays(periods[editIndex + 1], -1) : addDays(todayBase, 7)}/>
       )}
 
       <Bloom c={c} show={!!bloom} x={bloom?.x} y={bloom?.y}/>
@@ -844,5 +849,5 @@ function CycleApp({
   );
 }
 
-export { LIGHT, DARK, loadStoredState, saveStoredState, hasPeriodOn, addPeriodEntry, setLastPeriodDate };
+export { LIGHT, DARK, loadStoredState, saveStoredState, hasPeriodOn, addPeriodEntry, setPeriodDate, removePeriodAt };
 export default CycleApp;

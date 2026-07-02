@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { hasPeriodOn, addPeriodEntry, setLastPeriodDate } from './CycleApp.jsx';
+import { hasPeriodOn, addPeriodEntry, setPeriodDate, removePeriodAt } from './CycleApp.jsx';
 
 const d = (y, m, day) => new Date(y, m - 1, day);
 
@@ -36,27 +36,49 @@ describe('addPeriodEntry', () => {
   });
 });
 
-describe('setLastPeriodDate', () => {
-  test('replaces the date of the most recent entry', () => {
+describe('setPeriodDate', () => {
+  test('replaces the entry at the given index', () => {
     const periods = [d(2026, 6, 3), d(2026, 7, 2)];
-    const result = setLastPeriodDate(periods, d(2026, 6, 30));
+    const result = setPeriodDate(periods, 1, d(2026, 6, 30));
     expect(result.map(x => x.getTime())).toEqual(
       [d(2026, 6, 3), d(2026, 6, 30)].map(x => x.getTime()),
     );
   });
 
-  test('works when there is only one entry', () => {
-    const result = setLastPeriodDate([d(2026, 7, 2)], d(2026, 6, 28));
-    expect(result.map(x => x.getTime())).toEqual([d(2026, 6, 28).getTime()]);
+  test('replaces a middle entry and keeps the list sorted', () => {
+    const periods = [d(2026, 5, 6), d(2026, 6, 3), d(2026, 7, 2)];
+    const result = setPeriodDate(periods, 1, d(2026, 6, 10));
+    expect(result.map(x => x.getTime())).toEqual(
+      [d(2026, 5, 6), d(2026, 6, 10), d(2026, 7, 2)].map(x => x.getTime()),
+    );
   });
 
   test('no-ops when the new date collides with another entry', () => {
     const periods = [d(2026, 6, 3), d(2026, 7, 2)];
-    const result = setLastPeriodDate(periods, d(2026, 6, 3));
+    const result = setPeriodDate(periods, 1, d(2026, 6, 3));
     expect(result.map(x => x.getTime())).toEqual(periods.map(x => x.getTime()));
   });
 
-  test('no-ops on an empty list', () => {
-    expect(setLastPeriodDate([], d(2026, 7, 2))).toEqual([]);
+  test('no-ops when the index is out of range', () => {
+    const periods = [d(2026, 7, 2)];
+    expect(setPeriodDate(periods, 3, d(2026, 6, 1)).map(x => x.getTime()))
+      .toEqual(periods.map(x => x.getTime()));
+    expect(setPeriodDate([], 0, d(2026, 6, 1))).toEqual([]);
+  });
+});
+
+describe('removePeriodAt', () => {
+  test('removes the entry at the given index', () => {
+    const periods = [d(2026, 5, 6), d(2026, 6, 3), d(2026, 7, 2)];
+    const result = removePeriodAt(periods, 1);
+    expect(result.map(x => x.getTime())).toEqual(
+      [d(2026, 5, 6), d(2026, 7, 2)].map(x => x.getTime()),
+    );
+  });
+
+  test('no-ops when the index is out of range', () => {
+    const periods = [d(2026, 7, 2)];
+    expect(removePeriodAt(periods, 5).map(x => x.getTime()))
+      .toEqual(periods.map(x => x.getTime()));
   });
 });
