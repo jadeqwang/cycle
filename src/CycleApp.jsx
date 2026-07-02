@@ -585,12 +585,24 @@ function Switch({ c, on, onChange }) {
 function EditLastModal({ c, open, onClose, entry, periodLength, onDelete, onEditDate, onEditEnd, minDate, maxDate }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(entry.start);
+  const [draftEnd, setDraftEnd] = useState(entry.end);
   useEffect(() => {
-    if (open) { setEditing(false); setDraft(entry.start); }
+    if (open) { setEditing(false); setDraft(entry.start); setDraftEnd(entry.end); }
   }, [open, entry]);
   if (!open) return null;
   const canBack = !minDate || diffDays(addDays(draft, -1), minDate) >= 0;
   const canFwd = diffDays(addDays(draft, 1), maxDate) <= 0;
+  const endMax = maxDate;
+  const clampEnd = (end) => {
+    if (!end) return null;
+    if (diffDays(end, draft) < 0) return draft;
+    if (diffDays(end, endMax) > 0) return endMax;
+    return end;
+  };
+  const defaultEnd = addDays(draft, Math.max(0, periodLength - 1));
+  const clampedDraftEnd = clampEnd(draftEnd);
+  const canEndBack = clampedDraftEnd && diffDays(addDays(clampedDraftEnd, -1), draft) >= 0;
+  const canEndFwd = clampedDraftEnd && diffDays(addDays(clampedDraftEnd, 1), endMax) <= 0;
   const chevronStyle = (enabled) => ({
     width: 48, height: 48, borderRadius: 24, border: 'none',
     background: 'transparent', color: c.textPrimary, opacity: enabled ? 0.85 : 0.25,
@@ -619,7 +631,40 @@ function EditLastModal({ c, open, onClose, entry, periodLength, onDelete, onEdit
                 <ChevronRight c="currentColor" s={24}/>
               </button>
             </div>
-            <button onClick={() => { onEditDate(draft); onClose(); }} style={{
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 500, color: c.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase' }}>Ended</div>
+              {clampedDraftEnd ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 4 }}>
+                    <button onClick={() => canEndBack && setDraftEnd(addDays(clampedDraftEnd, -1))} disabled={!canEndBack} style={chevronStyle(canEndBack)}>
+                      <ChevronLeft c="currentColor" s={24}/>
+                    </button>
+                    <div style={{ flex: 1, textAlign: 'center' }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.3 }}>{fmt(clampedDraftEnd)}</div>
+                    </div>
+                    <button onClick={() => canEndFwd && setDraftEnd(addDays(clampedDraftEnd, 1))} disabled={!canEndFwd} style={chevronStyle(canEndFwd)}>
+                      <ChevronRight c="currentColor" s={24}/>
+                    </button>
+                  </div>
+                  <button onClick={() => setDraftEnd(null)} style={{
+                    width: '100%', height: 40, marginTop: 6, borderRadius: 12, border: `1px solid ${c.hairline}`,
+                    background: 'transparent', color: c.textSecondary,
+                    fontFamily: 'var(--font-ui)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
+                  }}>Clear</button>
+                </>
+              ) : (
+                <button onClick={() => setDraftEnd(clampEnd(defaultEnd))} style={{
+                  width: '100%', height: 46, marginTop: 10, borderRadius: 14, border: `1px solid ${c.hairline}`,
+                  background: c.surface, color: c.textPrimary,
+                  fontFamily: 'var(--font-ui)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
+                }}>Set end date</button>
+              )}
+            </div>
+            <button onClick={() => {
+              onEditDate(draft);
+              onEditEnd(clampedDraftEnd);
+              onClose();
+            }} style={{
               width: '100%', height: 52, marginTop: 18, borderRadius: 14, border: 'none',
               background: c.accent, color: '#FFFEFB',
               fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 600, letterSpacing: 0.3, cursor: 'pointer',
@@ -627,7 +672,7 @@ function EditLastModal({ c, open, onClose, entry, periodLength, onDelete, onEdit
             }}>
               Save <Check c="#FFFEFB" s={16}/>
             </button>
-            <button onClick={() => { setEditing(false); setDraft(entry.start); }} style={{
+            <button onClick={() => { setEditing(false); setDraft(entry.start); setDraftEnd(entry.end); }} style={{
               width: '100%', height: 44, marginTop: 10, border: 'none',
               background: 'transparent', color: c.textSecondary,
               fontFamily: 'var(--font-ui)', fontSize: 14, cursor: 'pointer',
@@ -638,6 +683,9 @@ function EditLastModal({ c, open, onClose, entry, periodLength, onDelete, onEdit
         <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 500, color: c.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase' }}>Period entry</div>
         <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.4, marginTop: 6 }}>{fmt(entry.start)}</div>
         <div style={{ fontFamily: 'var(--font-ui)', fontSize: 14, color: c.textSecondary, marginTop: 4 }}>{fmtRange(entry.start, periodLength)}</div>
+        <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textFaint, marginTop: 4 }}>
+          {entry.end ? `Ended ${fmt(entry.end)}` : 'End not recorded'}
+        </div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
           <button onClick={() => setEditing(true)} style={{
