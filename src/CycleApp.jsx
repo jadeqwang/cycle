@@ -208,7 +208,7 @@ function NavPill({ c }) {
 
 // ─── log button with ±7 day stepper ────────────────────────────────────────
 function LogButton({ c, offset, setOffset, onConfirm, disabled }) {
-  const date = addDays(todayBase, offset);
+  const date = addDays(startOfToday(), offset);
   const label = offset === 0 ? 'Today' : offset === -1 ? 'Yesterday' : offset === 1 ? 'Tomorrow' : (offset < 0 ? `${-offset} days ago` : `in ${offset} days`);
   return (
     <div style={{
