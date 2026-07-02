@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "test": "vitest run",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "cap:sync": "npm run build && npx cap sync android",
@@ -22,6 +23,7 @@
     "vite": "^7.1.7"
   },
   "devDependencies": {
-    "@capacitor/cli": "^7.6.7"
+    "@capacitor/cli": "^7.6.7",
+    "vitest": "^4.1.9"
   }
 }

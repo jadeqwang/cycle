@@ -60,6 +60,14 @@ function relDays(target, base = startOfToday()) {
   return `${-d} days ago`;
 }
 
+function hasPeriodOn(periods, date) {
+  return periods.some(p => diffDays(p, date) === 0);
+}
+function addPeriodEntry(periods, date) {
+  if (hasPeriodOn(periods, date)) return periods;
+  return [...periods, date].sort((a, b) => a - b);
+}
+
 function weekdayMonthDay(d) {
   return d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 }
@@ -257,10 +265,11 @@ function LogButton({ c, offset, setOffset, onConfirm, disabled }) {
           width: 'calc(100% - 16px)', height: 56, borderRadius: 16,
           border: 'none', background: 'rgba(255,254,251,0.18)',
           color: '#FFFEFB', fontFamily: 'var(--font-ui)', fontSize: 16, fontWeight: 600,
-          letterSpacing: 0.3, cursor: 'pointer',
+          letterSpacing: 0.3, cursor: disabled ? 'default' : 'pointer',
+          opacity: disabled ? 0.5 : 1, transition: 'opacity 240ms ease',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
         }}>
-        Confirm <Check c="#FFFEFB" s={18}/>
+        {disabled ? 'Already logged' : <>Confirm <Check c="#FFFEFB" s={18}/></>}
       </button>
     </div>
   );
@@ -618,7 +627,8 @@ function CycleApp({
 
   const handleConfirm = () => {
     const newDate = addDays(todayBase, logOffset);
-    setPeriods(p => [...p, newDate].sort((a,b) => a - b));
+    if (hasPeriodOn(periods, newDate)) return;
+    setPeriods(p => addPeriodEntry(p, newDate));
     setLogOffset(0);
     if (buttonRef.current) {
       const r = buttonRef.current.getBoundingClientRect();
@@ -687,7 +697,8 @@ function CycleApp({
           <LastBlock c={c} last={last} periodLength={periodLen} onOpen={() => !empty && setEditOpen(true)} empty={empty}/>
           <NextBlock c={c} next={next} late={late} empty={empty}/>
           <div ref={buttonRef}>
-            <LogButton c={c} offset={logOffset} setOffset={setLogOffset} onConfirm={handleConfirm}/>
+            <LogButton c={c} offset={logOffset} setOffset={setLogOffset} onConfirm={handleConfirm}
+              disabled={hasPeriodOn(periods, addDays(todayBase, logOffset))}/>
           </div>
         </div>
 
@@ -769,5 +780,5 @@ function CycleApp({
   );
 }
 
-export { LIGHT, DARK, loadStoredState, saveStoredState };
+export { LIGHT, DARK, loadStoredState, saveStoredState, hasPeriodOn, addPeriodEntry };
 export default CycleApp;
