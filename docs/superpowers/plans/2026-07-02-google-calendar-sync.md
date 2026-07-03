@@ -58,7 +58,7 @@
   - `parseStoredEntry(raw) -> entry|null` (accepts v1 string or v2 object)
   - `loadStoredState()` now also returns `deletedEventIds: string[]`, `lastSyncedAt: string|null`; `saveStoredState` persists them and writes `schema: 2` with entries as `{start:'YYYY-MM-DD', end, startEventId, endEventId, updatedAt}`.
 
-- [ ] **Step 1: Write the failing tests** — replace the existing `setPeriodDate`/`removePeriodAt`/`hasPeriodOn`/`addPeriodEntry` describe blocks in `src/CycleApp.test.js` (they currently pass plain `Date` arrays) with entry-based tests, and add migration/median tests:
+- [x] **Step 1: Write the failing tests** — replace the existing `setPeriodDate`/`removePeriodAt`/`hasPeriodOn`/`addPeriodEntry` describe blocks in `src/CycleApp.test.js` (they currently pass plain `Date` arrays) with entry-based tests, and add migration/median tests:
 
 ```js
 import { describe, test, expect } from 'vitest';
@@ -180,7 +180,7 @@ Keep the file's existing `hasPeriodOn`/`addPeriodEntry` describe blocks DELETED 
 Run: `npx vitest run`
 Expected: FAIL — `makeEntry is not a function` / entries lack `.start` etc.
 
-- [ ] **Step 3: Implement in `src/CycleApp.jsx`.** Replace the current helper block (`hasPeriodOn`, `addPeriodEntry`, `setPeriodDate`, `removePeriodAt` — currently just above `weekdayMonthDay`) with:
+- [x] **Step 3: Implement in `src/CycleApp.jsx`.** Replace the current helper block (`hasPeriodOn`, `addPeriodEntry`, `setPeriodDate`, `removePeriodAt` — currently just above `weekdayMonthDay`) with:
 
 ```js
 // ─── period entries ────────────────────────────────────────────────────────
@@ -282,12 +282,12 @@ Also DELETE the unused `scenarioPeriods` function (verified unused: `grep -rn sc
 
 NOTE: the component will not compile against the new model until Task 2 — that is expected; Task 1 and 2 land as one commit pair, but run the unit tests now (they import only helpers, and Vite's transform tolerates the not-yet-updated component because tests never render it — the component still references `periods` as entries incorrectly only at runtime, not import time). If `npm run build` is run here it may still pass (no type checking); do not runtime-verify until Task 2.
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run`
 Expected: PASS (all new tests; old superseded tests removed).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/CycleApp.jsx src/CycleApp.test.js
@@ -307,7 +307,7 @@ git commit -m "Add entry-based period model with schema v2 migration"
 
 Every place that treated a period as a `Date` now uses `.start`. Concretely, in `CycleApp`:
 
-- [ ] **Step 1: Update `CycleApp` internals.** Apply these changes:
+- [x] **Step 1: Update `CycleApp` internals.** Apply these changes:
 
 New state next to the others (initial values from new props):
 
@@ -398,7 +398,7 @@ LogButton `disabled` prop: `hasPeriodOn(periods, addDays(todayBase, logOffset))`
 
 In `EditLastModal`, rename prop `last` → `entry`; all `last` references become `entry.start` (display) and the draft reset becomes `setDraft(entry.start)`. `onEditEnd` is wired in Task 3 (accept the prop now).
 
-- [ ] **Step 2: Update `src/main.jsx`** — pass through the new fields:
+- [x] **Step 2: Update `src/main.jsx`** — pass through the new fields:
 
 ```jsx
       initialDeletedEventIds={stored.deletedEventIds || []}
@@ -407,7 +407,7 @@ In `EditLastModal`, rename prop `last` → `entry`; all `last` references become
 
 (add to the `<CycleApp …>` props; `handleSettingsChange` already spreads `next` into stored state, so the new payload fields persist automatically).
 
-- [ ] **Step 3: Tests + build**
+- [x] **Step 3: Tests + build**
 
 Run: `npx vitest run` → PASS. Run: `npm run build` → succeeds.
 
@@ -417,7 +417,7 @@ Run: `npx vitest run` → PASS. Run: `npm run build` → succeeds.
 3. Delete an entry that has event ids: seed `{periods:[{start:'2026-06-28',end:'2026-07-02',startEventId:'x1',endEventId:'x2',updatedAt:'2026-06-04T00:00:00Z'}], ...}` → delete it in the UI → `JSON.parse(localStorage.getItem('cycle-app.state.v1')).deletedEventIds` equals `['x1','x2']`.
 4. Clear localStorage when done.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/CycleApp.jsx src/main.jsx
@@ -435,7 +435,7 @@ git commit -m "Refactor component to entry model with delete tombstones"
 **Interfaces:**
 - Consumes: `entry`, `onEditEnd(end: Date|null)`, `minDate`, `maxDate` from Task 2.
 
-- [ ] **Step 1: Extend the modal's editing mode with an end-date stepper.** In `EditLastModal`, add draft state `const [draftEnd, setDraftEnd] = useState(entry.end);` (reset alongside `draft` in the `open` effect). In the editing branch, below the existing start stepper and above Save, add:
+- [x] **Step 1: Extend the modal's editing mode with an end-date stepper.** In `EditLastModal`, add draft state `const [draftEnd, setDraftEnd] = useState(entry.end);` (reset alongside `draft` in the `open` effect). In the editing branch, below the existing start stepper and above Save, add:
 
 ```jsx
             <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 500, color: c.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase', marginTop: 18 }}>Ended</div>
@@ -487,11 +487,11 @@ View mode: under the existing range line add an end line:
         </div>
 ```
 
-- [ ] **Step 2: Tests + build:** `npx vitest run` → PASS; `npm run build` → OK.
+- [x] **Step 2: Tests + build:** `npx vitest run` → PASS; `npm run build` → OK.
 
 - [ ] **Step 3: Runtime verify (browser):** seed two entries, open modal → Edit date: set an end via "Set end date", step it, check bounds (can't go below start; can't pass next entry − 1 / today + 7), Save → view shows "Ended <date>"; Last-period card shows the real range; Settings → Period length AUTO now tracks the median of real ends (seed entries with 4- and 6-day spans → auto shows 5–6 accordingly). Clear end → "End not recorded". Clean localStorage after.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/CycleApp.jsx
@@ -510,9 +510,9 @@ git commit -m "Add per-entry end date editing and auto period length from real e
 - Produces: `mergeImportedPeriods(existing, incoming) -> entries` (exported).
 - Import format = storage format: `{ schema: 2, periods: [{start, end, startEventId, endEventId, updatedAt}] }`; also accepts a bare array.
 
-- [ ] **Step 1: Install dep** — `npm install @capacitor/share && npx cap sync android`
+- [x] **Step 1: Install dep** — `npm install @capacitor/share && npx cap sync android`
 
-- [ ] **Step 2: Write failing merge tests** (append to `src/CycleApp.test.js`):
+- [x] **Step 2: Write failing merge tests** (append to `src/CycleApp.test.js`):
 
 ```js
 import { mergeImportedPeriods } from './CycleApp.jsx';
@@ -555,7 +555,7 @@ describe('mergeImportedPeriods', () => {
 
 - [ ] **Step 3: Run** `npx vitest run` → FAIL (`mergeImportedPeriods is not a function`).
 
-- [ ] **Step 4: Implement + export in `src/CycleApp.jsx`:**
+- [x] **Step 4: Implement + export in `src/CycleApp.jsx`:**
 
 ```js
 function mergeImportedPeriods(existing, incoming) {
@@ -579,7 +579,7 @@ function mergeImportedPeriods(existing, incoming) {
 
 Run `npx vitest run` → PASS.
 
-- [ ] **Step 5: Wire Export.** At the top of `src/CycleApp.jsx` add `import { Share } from '@capacitor/share';` and `import { Capacitor } from '@capacitor/core';`. In `SettingsSheet`, the export button (currently dead, subtitle "CSV to Google Sheets") gets:
+- [x] **Step 5: Wire Export.** At the top of `src/CycleApp.jsx` add `import { Share } from '@capacitor/share';` and `import { Capacitor } from '@capacitor/core';`. In `SettingsSheet`, the export button (currently dead, subtitle "CSV to Google Sheets") gets:
 
 ```jsx
           <button onClick={onExport} ...existing styles...>
@@ -602,7 +602,7 @@ and `CycleApp` passes:
   };
 ```
 
-- [ ] **Step 6: Add Import UI.** New Settings row "Import data / Paste a JSON backup" below Export, opening a modal (same overlay pattern as `EditLastModal`, zIndex 50):
+- [x] **Step 6: Add Import UI.** New Settings row "Import data / Paste a JSON backup" below Export, opening a modal (same overlay pattern as `EditLastModal`, zIndex 50):
 
 ```jsx
 function ImportModal({ c, open, onClose, onImport }) {
@@ -644,7 +644,7 @@ function ImportModal({ c, open, onClose, onImport }) {
 
 - [ ] **Step 7: Runtime verify (browser):** clear localStorage → Settings → Import data → paste the CONTENTS of `/home/jade/Documents/cycle/period-import.json` → Import. Expect: history "40 entries", last period June 28 with "Ended July 2" in its modal, prediction ≈ July 24–26 (June 28 + auto cycle ≈ 26–28), Settings period length AUTO ≈ 5–6. Then Export (web copies to clipboard) → `navigator.clipboard.readText()` starts with `{"schema": 2` and contains `"startEventId"`. Garbage paste shows the inline error and changes nothing. Clear localStorage after.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/CycleApp.jsx src/CycleApp.test.js package.json package-lock.json
@@ -669,7 +669,7 @@ git commit -m "Add JSON export via share sheet and merging import"
     - `localPeriods`: the post-sync serialized entries, sorted
     - `clearedTombstones`: every tombstone consumed this run (all of them — matched ones get deletes pushed, unmatched are already gone)
 
-- [ ] **Step 1: Write failing tests** in `src/sync.test.js`:
+- [x] **Step 1: Write failing tests** in `src/sync.test.js`:
 
 ```js
 import { describe, test, expect } from 'vitest';
@@ -805,7 +805,7 @@ describe('planSync', () => {
 
 - [ ] **Step 2: Run** `npx vitest run src/sync.test.js` → FAIL (module doesn't exist).
 
-- [ ] **Step 3: Implement `src/sync.js`:**
+- [x] **Step 3: Implement `src/sync.js`:**
 
 ```js
 // Pure sync logic. All dates are 'YYYY-MM-DD' strings here (lexicographic
@@ -903,9 +903,9 @@ export function planSync({ local, remote, deletedEventIds, timeMin }) {
 }
 ```
 
-- [ ] **Step 4: Run** `npx vitest run` → ALL PASS (new + existing). If a test fails, fix `sync.js`, not the test — the tests encode the spec's merge rules.
+- [x] **Step 4: Run** `npx vitest run` → ALL PASS (new + existing). If a test fails, fix `sync.js`, not the test — the tests encode the spec's merge rules.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/sync.js src/sync.test.js
