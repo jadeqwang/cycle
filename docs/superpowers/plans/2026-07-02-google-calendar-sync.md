@@ -803,7 +803,7 @@ describe('planSync', () => {
 });
 ```
 
-- [ ] **Step 2: Run** `npx vitest run src/sync.test.js` → FAIL (module doesn't exist).
+- [x] **Step 2: Run** `npx vitest run src/sync.test.js` → FAIL (module doesn't exist).
 
 - [x] **Step 3: Implement `src/sync.js`:**
 
@@ -930,7 +930,7 @@ git commit -m "Add pure sync planner with projection filtering and tombstones"
   - `deleteEvent(token, calendarId, eventId) -> void` (404/410 tolerated)
   - All throw `GcalError(status, message)` on other failures.
 
-- [ ] **Step 1: Create `src/sync-config.example.js`:**
+- [x] **Step 1: Create `src/sync-config.example.js`:**
 
 ```js
 // Copy to src/sync-config.js (gitignored) and fill in your OAuth client id.
@@ -945,7 +945,7 @@ export const SYNC_CONFIG = {
 
 Also `cp src/sync-config.example.js src/sync-config.js` (the gitignored working copy; builds need it to exist).
 
-- [ ] **Step 2: Create `src/gcal.js`:**
+- [x] **Step 2: Create `src/gcal.js`:**
 
 ```js
 const BASE = 'https://www.googleapis.com/calendar/v3';
@@ -1035,9 +1035,9 @@ export async function deleteEvent(token, calendarId, eventId) {
 }
 ```
 
-- [ ] **Step 3: Build check** — `npm run build` → OK (config import not wired yet; that's Task 8).
+- [x] **Step 3: Build check** — `npm run build` → OK (config import not wired yet; that's Task 8).
 
-- [ ] **Step 4: Commit** (confirm `git status` does NOT list `src/sync-config.js` — it's gitignored)
+- [x] **Step 4: Commit** (confirm `git status` does NOT list `src/sync-config.js` — it's gitignored)
 
 ```bash
 git add src/gcal.js src/sync-config.example.js
@@ -1065,9 +1065,9 @@ Google installed-app OAuth notes (verify against current docs at https://develop
 - Token endpoint refresh with a refresh_token needs only `client_id`, `refresh_token`, `grant_type=refresh_token`.
 - `error=invalid_grant` on refresh means revoked → surface `AuthRequired`.
 
-- [ ] **Step 1: Install deps** — `npm install @capacitor/browser @capacitor/preferences && npx cap sync android`
+- [x] **Step 1: Install deps** — `npm install @capacitor/browser @capacitor/preferences && npx cap sync android`
 
-- [ ] **Step 2: Create `src/auth.js`:**
+- [x] **Step 2: Create `src/auth.js`:**
 
 ```js
 import { Browser } from '@capacitor/browser';
@@ -1170,7 +1170,7 @@ export async function getAccessToken(clientId) {
 }
 ```
 
-- [ ] **Step 3: Android deep-link plumbing.** In `android/app/build.gradle`, inside `android { defaultConfig { … } }` add:
+- [x] **Step 3: Android deep-link plumbing.** In `android/app/build.gradle`, inside `android { defaultConfig { … } }` add:
 
 ```gradle
         manifestPlaceholders = [oauthScheme: project.findProperty('OAUTH_SCHEME') ?: 'com.jade.cycle.unset']
@@ -1189,9 +1189,9 @@ In `android/app/src/main/AndroidManifest.xml`, inside the MainActivity `<activit
 
 (Jade sets `OAUTH_SCHEME=com.googleusercontent.apps.<id>` in `android/gradle.properties` during Task 9 — client ids for installed apps are public by design, safe to commit.)
 
-- [ ] **Step 4: Build checks** — `npm run build`, then `npm run cap:sync`, then `cd android && ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleDebug --no-daemon` → BUILD SUCCESSFUL.
+- [x] **Step 4: Build checks** — `npm run build`, then `npm run cap:sync`, then `cd android && ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleDebug --no-daemon` → BUILD SUCCESSFUL.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/auth.js android/app/build.gradle android/app/src/main/AndroidManifest.xml package.json package-lock.json
@@ -1210,7 +1210,7 @@ git commit -m "Add OAuth PKCE flow and Android deep-link plumbing"
 - Consumes: everything from Tasks 5–7.
 - Produces: `runSync({ periods, deletedEventIds, todayStr }) -> { periods, clearedTombstones, syncedAt }` (serialized entries in/out) in `src/run-sync.js`; UI states on the Settings sync row.
 
-- [ ] **Step 1: Create `src/run-sync.js`** — the imperative glue (kept out of the component for clarity):
+- [x] **Step 1: Create `src/run-sync.js`** — the imperative glue (kept out of the component for clarity):
 
 ```js
 import { getAccessToken } from './auth.js';
@@ -1249,7 +1249,7 @@ export async function runSync({ periods, deletedEventIds }) {
 }
 ```
 
-- [ ] **Step 2: Wire into `CycleApp`.** Replace the fake calendar-sync section in `SettingsSheet` and the `calSync`/`unsynced` plumbing:
+- [x] **Step 2: Wire into `CycleApp`.** Replace the fake calendar-sync section in `SettingsSheet` and the `calSync`/`unsynced` plumbing:
 
 State in `CycleApp`:
 
@@ -1309,11 +1309,11 @@ Remove the old `calSync`/`setCalSync`/`unsynced` code paths and the `Switch` usa
 
 Also update the privacy footer text to: `Your data stays on this device\nand in your own Google Calendar.`
 
-- [ ] **Step 3: Tests + build** — `npx vitest run` → PASS (no component tests exist; pure modules unaffected). `npm run build` → OK. `npm run cap:sync && cd android && ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleDebug --no-daemon` → BUILD SUCCESSFUL.
+- [x] **Step 3: Tests + build** — `npx vitest run` → PASS (no component tests exist; pure modules unaffected). `npm run build` → OK. `npm run cap:sync && cd android && ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleDebug --no-daemon` → BUILD SUCCESSFUL.
 
 - [ ] **Step 4: Runtime verify what's verifiable without credentials (browser):** Settings shows the disabled "Available in the Android app" sync row on web; import/export still work; no console errors. On the emulator: the Connect button appears; tapping it with the placeholder client id opens the browser to a Google error page — that's the expected pre-setup behavior; back out cleanly, app doesn't crash.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/CycleApp.jsx src/main.jsx src/run-sync.js
