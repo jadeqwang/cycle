@@ -2,6 +2,11 @@
 // Calm, breathing-paced UI. Earth-and-water palette.
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { Share } from '@capacitor/share';
+import { AuthRequired, isSignedIn, signIn, signOut } from './auth.js';
+import { runSync } from './run-sync.js';
+import { SYNC_CONFIG } from './sync-config.js';
 
 // ─── palette (from spec §7) ────────────────────────────────────────────────
 const LIGHT = {
@@ -60,22 +65,16 @@ function relDays(target, base = startOfToday()) {
   return `${-d} days ago`;
 }
 
-function hasPeriodOn(periods, date) {
-  return periods.some(p => diffDays(p, date) === 0);
-}
-function addPeriodEntry(periods, date) {
-  if (hasPeriodOn(periods, date)) return periods;
-  return [...periods, date].sort((a, b) => a - b);
-}
-function setPeriodDate(periods, index, date) {
-  if (index < 0 || index >= periods.length) return periods;
-  const rest = periods.filter((_, i) => i !== index);
-  if (hasPeriodOn(rest, date)) return periods;
-  return [...rest, date].sort((a, b) => a - b);
-}
-function removePeriodAt(periods, index) {
-  if (index < 0 || index >= periods.length) return periods;
-  return periods.filter((_, i) => i !== index);
+function syncSubtitle({ native, connected, syncStatus, lastSyncedAt }) {
+  if (!native) return 'Available in the Android app';
+  if (syncStatus === 'auth') return 'Reconnect needed';
+  if (!connected) return 'Two-way sync with your Period Tracker calendar';
+  if (syncStatus === 'syncing') return 'Syncing…';
+  if (syncStatus === 'error') return 'Sync failed — will retry';
+  if (!lastSyncedAt) return 'Connected to Period Tracker';
+  const synced = new Date(lastSyncedAt);
+  const localDay = new Date(synced.getFullYear(), synced.getMonth(), synced.getDate());
+  return `Synced · ${relDays(localDay)}`;
 }
 
 function weekdayMonthDay(d) {
@@ -88,9 +87,201 @@ function serializeDate(d) {
 
 function parseStoredDate(value) {
   if (!value || typeof value !== 'string') return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
   const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) return null;
-  return new Date(year, month - 1, day);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return date;
+}
+
+function nowIsoAfter(previous) {
+  const now = new Date();
+  const previousTime = Date.parse(previous);
+  if (Number.isFinite(previousTime) && now.getTime() <= previousTime) {
+    return new Date(previousTime + 1).toISOString();
+  }
+  return now.toISOString();
+}
+
+function makeEntry(start) {
+  return {
+    start,
+    end: null,
+    startEventId: null,
+    endEventId: null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function sortEntries(entries) {
+  return [...entries].sort((a, b) => a.start - b.start);
+}
+
+function hasPeriodOn(entries, date) {
+  return entries.some(entry => diffDays(entry.start, date) === 0);
+}
+
+function addPeriodEntry(entries, date) {
+  if (hasPeriodOn(entries, date)) return entries;
+  return sortEntries([...entries, makeEntry(date)]);
+}
+
+function setPeriodDate(entries, index, date) {
+  if (index < 0 || index >= entries.length) return entries;
+  const rest = entries.filter((_, i) => i !== index);
+  if (hasPeriodOn(rest, date)) return entries;
+  const current = entries[index];
+  return sortEntries([
+    ...rest,
+    { ...current, start: date, updatedAt: nowIsoAfter(current.updatedAt) },
+  ]);
+}
+
+function setPeriodEnd(entries, index, end) {
+  if (index < 0 || index >= entries.length) return entries;
+  return entries.map((entry, i) => (
+    i === index ? { ...entry, end: end || null, updatedAt: nowIsoAfter(entry.updatedAt) } : entry
+  ));
+}
+
+function removePeriodAt(entries, index) {
+  if (index < 0 || index >= entries.length) return entries;
+  return entries.filter((_, i) => i !== index);
+}
+
+function collectEventIds(entry) {
+  return [entry.startEventId, entry.endEventId].filter(id => id !== null && id !== undefined);
+}
+
+function autoPeriodLen(entries) {
+  const lengths = sortEntries(entries)
+    .filter(entry => entry.end)
+    .slice(-5)
+    .map(entry => diffDays(entry.end, entry.start) + 1)
+    .sort((a, b) => a - b);
+  if (!lengths.length) return null;
+  return lengths[Math.floor(lengths.length / 2)];
+}
+
+function parseStoredEntry(raw) {
+  if (typeof raw === 'string') {
+    const start = parseStoredDate(raw);
+    return start ? makeEntry(start) : null;
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const start = parseStoredDate(raw.start);
+  if (!start) return null;
+  const end = parseStoredDate(raw.end);
+  return {
+    start,
+    end,
+    startEventId: typeof raw.startEventId === 'string' ? raw.startEventId : null,
+    endEventId: typeof raw.endEventId === 'string' ? raw.endEventId : null,
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(),
+  };
+}
+
+function serializeEntry(entry) {
+  return {
+    start: serializeDate(entry.start),
+    end: entry.end ? serializeDate(entry.end) : null,
+    startEventId: entry.startEventId || null,
+    endEventId: entry.endEventId || null,
+    updatedAt: entry.updatedAt,
+  };
+}
+
+function sameSerializedEntries(a, b) {
+  return JSON.stringify(a.map(serializeEntry)) === JSON.stringify(b.map(serializeEntry));
+}
+
+// snapshotByStart: serialized start -> serialized entry, captured from the exact
+// periods handed to runSync, so mid-flight edits are detectable via updatedAt.
+function mergeSyncResult(prev, snapshotByStart, resultPeriods) {
+  const prevByStart = new Map(prev.map(entry => [serializeDate(entry.start), entry]));
+  const resultByStart = new Map(resultPeriods.map(entry => [serializeDate(entry.start), entry]));
+  const merged = resultPeriods.map(entry => {
+    const start = serializeDate(entry.start);
+    const snapshotEntry = snapshotByStart.get(start);
+    const prevEntry = prevByStart.get(start);
+    if (snapshotEntry && prevEntry && prevEntry.updatedAt > snapshotEntry.updatedAt) {
+      // Edited while the sync was in flight: the local edit wins, but the sync
+      // result's event ids reflect remote reality (created/adopted/cleared), so
+      // adopt them — the next sync then patches instead of duplicating.
+      return { ...prevEntry, startEventId: entry.startEventId, endEventId: entry.endEventId };
+    }
+    return entry;
+  });
+  merged.push(...prev.filter(entry => {
+    const start = serializeDate(entry.start);
+    return !snapshotByStart.has(start) && !resultByStart.has(start);
+  }));
+  const sorted = sortEntries(merged);
+  return sameSerializedEntries(prev, sorted) ? prev : sorted;
+}
+
+function filterClearedTombstones(ids, clearedTombstones) {
+  const next = ids.filter(id => !clearedTombstones.includes(id));
+  return next.length === ids.length ? ids : next;
+}
+
+function buildBackupState(state) {
+  return {
+    schema: 2,
+    periods: state.periods.map(serializeEntry),
+    deletedEventIds: state.deletedEventIds || [],
+    lastSyncedAt: typeof state.lastSyncedAt === 'string' ? state.lastSyncedAt : null,
+    cycleLen: state.cycleLen,
+    cycleMode: state.cycleMode,
+    periodLen: state.periodLen,
+    periodMode: state.periodMode,
+    calSync: !!state.calSync,
+    dark: !!state.dark,
+    accent: state.accent,
+    font: state.font,
+  };
+}
+
+function mergeIdField(currentId, incomingId, newerIncoming) {
+  if (currentId === null || currentId === undefined) return incomingId;
+  if (incomingId === null || incomingId === undefined) return currentId;
+  if (currentId !== incomingId && newerIncoming) return incomingId;
+  return currentId;
+}
+
+function mergeImportedPeriods(existing, incoming) {
+  const out = [...existing];
+  for (const inc of incoming) {
+    const i = out.findIndex(e => diffDays(e.start, inc.start) === 0);
+    if (i === -1) { out.push(inc); continue; }
+    const cur = out[i];
+    const newerIncoming = inc.updatedAt > cur.updatedAt;
+    out[i] = {
+      ...cur,
+      end: cur.end && inc.end ? (newerIncoming ? inc.end : cur.end) : (cur.end || inc.end),
+      startEventId: mergeIdField(cur.startEventId, inc.startEventId, newerIncoming),
+      endEventId: mergeIdField(cur.endEventId, inc.endEventId, newerIncoming),
+      updatedAt: newerIncoming ? inc.updatedAt : cur.updatedAt,
+    };
+  }
+  return sortEntries(out);
+}
+
+function downloadJsonBackup(json) {
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  try {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'cycle-backup.json';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 function loadStoredState() {
@@ -99,7 +290,7 @@ function loadStoredState() {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return {
-      periods: Array.isArray(parsed.periods) ? parsed.periods.map(parseStoredDate).filter(Boolean) : [],
+      periods: Array.isArray(parsed.periods) ? sortEntries(parsed.periods.map(parseStoredEntry).filter(Boolean)) : [],
       cycleLen: Number.isFinite(parsed.cycleLen) ? parsed.cycleLen : 27,
       cycleMode: parsed.cycleMode === 'auto' ? 'auto' : 'manual',
       periodLen: Number.isFinite(parsed.periodLen) ? parsed.periodLen : 5,
@@ -108,6 +299,8 @@ function loadStoredState() {
       dark: !!parsed.dark,
       accent: parsed.accent || '#C4928A',
       font: parsed.font || 'quicksand',
+      deletedEventIds: Array.isArray(parsed.deletedEventIds) ? parsed.deletedEventIds.filter(id => typeof id === 'string') : [],
+      lastSyncedAt: typeof parsed.lastSyncedAt === 'string' ? parsed.lastSyncedAt : null,
     };
   } catch {
     return null;
@@ -118,37 +311,14 @@ function saveStoredState(state) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
       ...state,
-      periods: state.periods.map(serializeDate),
+      schema: 2,
+      periods: state.periods.map(serializeEntry),
+      deletedEventIds: Array.isArray(state.deletedEventIds) ? state.deletedEventIds : [],
+      lastSyncedAt: typeof state.lastSyncedAt === 'string' ? state.lastSyncedAt : null,
     }));
   } catch {
     // Storage can be unavailable in private browsing or locked-down webviews.
   }
-}
-
-// ─── presets (state scenarios for tweaks) ──────────────────────────────────
-function scenarioPeriods(scenario) {
-  // returns array of period start dates, oldest first
-  const T = startOfToday();
-  if (scenario === 'empty') return [];
-  if (scenario === 'late') {
-    // last logged was 29 days ago; cycle=27 → predicted 2 days ago
-    return [
-      addDays(T, -29 - 26 - 28),
-      addDays(T, -29 - 26),
-      addDays(T, -29),
-    ];
-  }
-  if (scenario === 'first-log') {
-    return [addDays(T, -85 - 27 - 26)];
-  }
-  // normal: last logged 19 days ago; cycle=27 → predicted in 8 days (May 24)
-  return [
-    addDays(T, -19 - 28 - 27 - 26),
-    addDays(T, -19 - 28 - 27),
-    addDays(T, -19 - 28),
-    addDays(T, -19 - 27),
-    addDays(T, -19),
-  ];
 }
 
 // ─── icons ─────────────────────────────────────────────────────────────────
@@ -311,14 +481,14 @@ function LastBlock({ c, last, periodLength, onOpen, empty }) {
         <>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.6 }}>
-              {fmt(last)}
+              {fmt(last.start)}
             </div>
             <div style={{ fontFamily: 'var(--font-ui)', fontSize: 14, color: c.textSecondary }}>
-              {relDays(last)}
+              {relDays(last.start)}
             </div>
           </div>
           <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textFaint, marginTop: 6 }}>
-            {fmtRange(last, periodLength)} · {periodLength} days
+            {last.end ? `${fmtRange(last.start, diffDays(last.end, last.start) + 1)} · ${diffDays(last.end, last.start) + 1} days` : `${fmtRange(last.start, periodLength)} · ${periodLength} days`}
           </div>
         </>
       )}
@@ -412,7 +582,30 @@ function StepperRow({ c, label, value, setValue, mode, setMode, min, max }) {
   );
 }
 
-function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, setCycleMode, periodLen, setPeriodLen, periodMode, setPeriodMode, calSync, setCalSync, calAccount }) {
+function SettingsSheet({
+  c,
+  open,
+  onClose,
+  native,
+  cycleLen,
+  setCycleLen,
+  cycleMode,
+  setCycleMode,
+  periodLen,
+  setPeriodLen,
+  periodMode,
+  setPeriodMode,
+  connected,
+  syncStatus,
+  lastSyncedAt,
+  signInError,
+  onConnect,
+  onSyncNow,
+  onSignOut,
+  onExport,
+  onImportOpen,
+}) {
+  const syncText = syncSubtitle({ native, connected, syncStatus, lastSyncedAt });
   return (
     <>
       <div
@@ -449,16 +642,56 @@ function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, set
               <div>
                 <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.textPrimary }}>Google Calendar sync</div>
                 <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>
-                  {calSync ? calAccount : 'One-way push of logged & predicted dates'}
+                  {syncText}
                 </div>
               </div>
-              <Switch c={c} on={calSync} onChange={setCalSync}/>
+              {!connected ? (
+                <button
+                  onClick={onConnect}
+                  disabled={!native}
+                  style={{
+                    border: 'none', borderRadius: 100, padding: '8px 14px',
+                    background: native ? c.accent : c.surfaceDeep,
+                    color: native ? '#FFFEFB' : c.textFaint,
+                    fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 600,
+                    cursor: native ? 'pointer' : 'default',
+                  }}>
+                  Connect
+                </button>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={onSyncNow}
+                    disabled={syncStatus === 'syncing'}
+                    style={{
+                      border: 'none', background: 'transparent',
+                      color: syncStatus === 'syncing' ? c.textFaint : c.accentDeep,
+                      fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 600,
+                      cursor: syncStatus === 'syncing' ? 'default' : 'pointer',
+                    }}>
+                    Sync now
+                  </button>
+                  <button
+                    onClick={onSignOut}
+                    style={{
+                      border: 'none', background: 'transparent', color: c.textSecondary,
+                      fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}>
+                    Sign out
+                  </button>
+                </div>
+              )}
             </div>
-            {calSync && (
+            {signInError && (
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.accentDeep, marginTop: 10 }}>
+                Sign-in didn't complete.
+              </div>
+            )}
+            {connected && (
               <button style={{
                 marginTop: 14, width: '100%', textAlign: 'left',
                 background: c.surface, border: 'none', borderRadius: 14, padding: '14px 16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'default',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 32, height: 32, borderRadius: 8, background: c.accentMuted, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -466,16 +699,15 @@ function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, set
                   </div>
                   <div>
                     <div style={{ fontFamily: 'var(--font-ui)', fontSize: 14, color: c.textPrimary }}>Calendar</div>
-                    <div style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: c.textSecondary }}>Personal (primary)</div>
+                    <div style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: c.textSecondary }}>{SYNC_CONFIG.calendarName}</div>
                   </div>
                 </div>
-                <ChevronRight c={c.textFaint} s={18}/>
               </button>
             )}
           </div>
 
           {/* export */}
-          <button style={{
+          <button onClick={onExport} style={{
             width: '100%', textAlign: 'left',
             background: 'transparent', border: 'none', padding: '18px 0',
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
@@ -483,14 +715,27 @@ function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, set
           }}>
             <div>
               <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.textPrimary }}>Export data</div>
-              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>CSV to Google Sheets</div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>JSON backup</div>
+            </div>
+            <ChevronRight c={c.textFaint} s={18}/>
+          </button>
+
+          <button onClick={onImportOpen} style={{
+            width: '100%', textAlign: 'left',
+            background: 'transparent', border: 'none', padding: '18px 0',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+            borderBottom: `1px solid ${c.hairline}`,
+          }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.textPrimary }}>Import data</div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>Paste a JSON backup</div>
             </div>
             <ChevronRight c={c.textFaint} s={18}/>
           </button>
 
           <div style={{ padding: '20px 0 8px', textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: c.textFaint, lineHeight: 1.5 }}>
-              All data stays on your device.<br/>No analytics. No tracking.
+              Your data stays on this device<br/>and in your own Google Calendar.
             </div>
           </div>
         </div>
@@ -520,16 +765,98 @@ function Switch({ c, on, onChange }) {
   );
 }
 
-// ─── edit-last modal ───────────────────────────────────────────────────────
-function EditLastModal({ c, open, onClose, last, periodLength, onDelete, onEditDate, minDate, maxDate }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(last);
+function ImportModal({ c, open, onClose, onImport }) {
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
   useEffect(() => {
-    if (open) { setEditing(false); setDraft(last); }
-  }, [open, last]);
+    if (open) {
+      setText('');
+      setError('');
+    }
+  }, [open]);
+  if (!open) return null;
+
+  const handleImport = () => {
+    try {
+      const parsed = JSON.parse(text);
+      const list = Array.isArray(parsed) ? parsed : parsed?.periods;
+      if (!Array.isArray(list)) throw new Error('invalid backup');
+      const entries = list.map(parseStoredEntry).filter(Boolean);
+      if (!entries.length) throw new Error('invalid backup');
+      onImport(entries);
+      onClose();
+    } catch {
+      setError("Couldn't read that — paste the full JSON backup.");
+    }
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'rgba(20,18,15,0.4)', zIndex: 50 }} />
+      <div style={{
+        position: 'absolute', left: 24, right: 24, top: '22%',
+        background: c.bg, borderRadius: 22, padding: 24, zIndex: 51,
+        boxShadow: '0 30px 60px rgba(0,0,0,0.25)',
+      }}>
+        <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 500, color: c.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase' }}>Import data</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.3, marginTop: 6 }}>JSON backup</div>
+        <textarea
+          value={text}
+          onChange={(event) => { setText(event.target.value); setError(''); }}
+          spellCheck={false}
+          style={{
+            width: '100%', minHeight: 190, marginTop: 18, boxSizing: 'border-box',
+            borderRadius: 14, border: `1px solid ${error ? c.accentDeep : c.hairline}`,
+            background: c.surface, color: c.textPrimary, padding: 14, resize: 'vertical',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+            fontSize: 12, lineHeight: 1.45, outline: 'none',
+          }}
+        />
+        {error && (
+          <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.accentDeep, marginTop: 10, lineHeight: 1.4 }}>
+            {error}
+          </div>
+        )}
+        <button onClick={handleImport} style={{
+          width: '100%', height: 52, marginTop: 18, borderRadius: 14, border: 'none',
+          background: c.accent, color: '#FFFEFB',
+          fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 600, letterSpacing: 0.3, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+        }}>
+          Import <Check c="#FFFEFB" s={16}/>
+        </button>
+        <button onClick={onClose} style={{
+          width: '100%', height: 44, marginTop: 10, border: 'none',
+          background: 'transparent', color: c.textSecondary,
+          fontFamily: 'var(--font-ui)', fontSize: 14, cursor: 'pointer',
+        }}>Cancel</button>
+      </div>
+    </>
+  );
+}
+
+// ─── edit-last modal ───────────────────────────────────────────────────────
+function EditLastModal({ c, open, onClose, entry, periodLength, onDelete, onEditDate, onEditEnd, minDate, maxDate }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(entry.start);
+  const [draftEnd, setDraftEnd] = useState(entry.end);
+  useEffect(() => {
+    if (open) { setEditing(false); setDraft(entry.start); setDraftEnd(entry.end); }
+  }, [open, entry]);
   if (!open) return null;
   const canBack = !minDate || diffDays(addDays(draft, -1), minDate) >= 0;
   const canFwd = diffDays(addDays(draft, 1), maxDate) <= 0;
+  const endMax = maxDate;
+  const clampEnd = (end) => {
+    if (!end) return null;
+    if (diffDays(end, draft) < 0) return draft;
+    if (diffDays(end, endMax) > 0) return endMax;
+    return end;
+  };
+  const defaultEnd = addDays(draft, Math.max(0, periodLength - 1));
+  const clampedDraftEnd = clampEnd(draftEnd);
+  const canEndBack = clampedDraftEnd && diffDays(addDays(clampedDraftEnd, -1), draft) >= 0;
+  const canEndFwd = clampedDraftEnd && diffDays(addDays(clampedDraftEnd, 1), endMax) <= 0;
   const chevronStyle = (enabled) => ({
     width: 48, height: 48, borderRadius: 24, border: 'none',
     background: 'transparent', color: c.textPrimary, opacity: enabled ? 0.85 : 0.25,
@@ -558,7 +885,40 @@ function EditLastModal({ c, open, onClose, last, periodLength, onDelete, onEditD
                 <ChevronRight c="currentColor" s={24}/>
               </button>
             </div>
-            <button onClick={() => { onEditDate(draft); onClose(); }} style={{
+            <div style={{ marginTop: 20 }}>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 500, color: c.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase' }}>Ended</div>
+              {clampedDraftEnd ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, gap: 4 }}>
+                    <button onClick={() => canEndBack && setDraftEnd(addDays(clampedDraftEnd, -1))} disabled={!canEndBack} style={chevronStyle(canEndBack)}>
+                      <ChevronLeft c="currentColor" s={24}/>
+                    </button>
+                    <div style={{ flex: 1, textAlign: 'center' }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.3 }}>{fmt(clampedDraftEnd)}</div>
+                    </div>
+                    <button onClick={() => canEndFwd && setDraftEnd(addDays(clampedDraftEnd, 1))} disabled={!canEndFwd} style={chevronStyle(canEndFwd)}>
+                      <ChevronRight c="currentColor" s={24}/>
+                    </button>
+                  </div>
+                  <button onClick={() => setDraftEnd(null)} style={{
+                    width: '100%', height: 40, marginTop: 6, borderRadius: 12, border: `1px solid ${c.hairline}`,
+                    background: 'transparent', color: c.textSecondary,
+                    fontFamily: 'var(--font-ui)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
+                  }}>Clear</button>
+                </>
+              ) : (
+                <button onClick={() => setDraftEnd(clampEnd(defaultEnd))} style={{
+                  width: '100%', height: 46, marginTop: 10, borderRadius: 14, border: `1px solid ${c.hairline}`,
+                  background: c.surface, color: c.textPrimary,
+                  fontFamily: 'var(--font-ui)', fontSize: 14, fontWeight: 500, cursor: 'pointer',
+                }}>Set end date</button>
+              )}
+            </div>
+            <button onClick={() => {
+              onEditDate(draft);
+              onEditEnd(clampedDraftEnd);
+              onClose();
+            }} style={{
               width: '100%', height: 52, marginTop: 18, borderRadius: 14, border: 'none',
               background: c.accent, color: '#FFFEFB',
               fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 600, letterSpacing: 0.3, cursor: 'pointer',
@@ -566,7 +926,7 @@ function EditLastModal({ c, open, onClose, last, periodLength, onDelete, onEditD
             }}>
               Save <Check c="#FFFEFB" s={16}/>
             </button>
-            <button onClick={() => { setEditing(false); setDraft(last); }} style={{
+            <button onClick={() => { setEditing(false); setDraft(entry.start); setDraftEnd(entry.end); }} style={{
               width: '100%', height: 44, marginTop: 10, border: 'none',
               background: 'transparent', color: c.textSecondary,
               fontFamily: 'var(--font-ui)', fontSize: 14, cursor: 'pointer',
@@ -575,8 +935,11 @@ function EditLastModal({ c, open, onClose, last, periodLength, onDelete, onEditD
         ) : (
           <>
         <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 500, color: c.textSecondary, letterSpacing: 0.6, textTransform: 'uppercase' }}>Period entry</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.4, marginTop: 6 }}>{fmt(last)}</div>
-        <div style={{ fontFamily: 'var(--font-ui)', fontSize: 14, color: c.textSecondary, marginTop: 4 }}>{fmtRange(last, periodLength)}</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.4, marginTop: 6 }}>{fmt(entry.start)}</div>
+        <div style={{ fontFamily: 'var(--font-ui)', fontSize: 14, color: c.textSecondary, marginTop: 4 }}>{fmtRange(entry.start, periodLength)}</div>
+        <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textFaint, marginTop: 4 }}>
+          {entry.end ? `Ended ${fmt(entry.end)}` : 'End not recorded'}
+        </div>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
           <button onClick={() => setEditing(true)} style={{
@@ -632,8 +995,9 @@ function CycleApp({
   initialCycleMode = 'manual',
   initialPeriodLen = 5,
   initialPeriodMode = 'manual',
+  initialDeletedEventIds = [],
+  initialLastSyncedAt = null,
   dark = false,
-  calSyncInit = false,
   accent = '#C4928A',
   accentDeep = '#A87770',
   accentMuted = '#E8D5D0',
@@ -646,38 +1010,157 @@ function CycleApp({
   const c = useMemo(() => ({ ...baseC, accent, accentDeep, accentMuted }), [baseC, accent, accentDeep, accentMuted]);
 
   const [periods, setPeriods] = useState(() => initialPeriods || []);
+  const [deletedEventIds, setDeletedEventIds] = useState(() => initialDeletedEventIds || []);
 
   const [cycleLen, setCycleLen] = useState(initialCycleLen);
   const [cycleMode, setCycleMode] = useState(initialCycleMode);
   const [periodLen, setPeriodLen] = useState(initialPeriodLen);
   const [periodMode, setPeriodMode] = useState(initialPeriodMode);
-  const [calSync, setCalSync] = useState(calSyncInit);
+  const [syncStatus, setSyncStatus] = useState('idle');
+  const [lastSyncedAt, setLastSyncedAt] = useState(initialLastSyncedAt);
+  const [connected, setConnected] = useState(false);
+  const [signInError, setSignInError] = useState(false);
   const [logOffset, setLogOffset] = useState(0);
   const [bloom, setBloom] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editIndex, setEditIndex] = useState(null);
-  const [unsynced, setUnsynced] = useState(false);
   const buttonRef = useRef(null);
+  const syncBusy = useRef(false);
+  const syncPending = useRef(false);
+  const retryTimer = useRef(null);
+  const errorClearTimer = useRef(null);
+  const retryCount = useRef(0);
+  const periodsRef = useRef(periods);
+  const deletedEventIdsRef = useRef(deletedEventIds);
+  periodsRef.current = periods;
+  deletedEventIdsRef.current = deletedEventIds;
 
   useEffect(() => {
-    onSettingsChange?.({ periods, cycleLen, cycleMode, periodLen, periodMode, calSync });
-  }, [periods, cycleLen, cycleMode, periodLen, periodMode, calSync, onSettingsChange]);
+    onSettingsChange?.({ periods, deletedEventIds, lastSyncedAt, cycleLen, cycleMode, periodLen, periodMode, calSync: connected });
+  }, [periods, deletedEventIds, lastSyncedAt, cycleLen, cycleMode, periodLen, periodMode, connected, onSettingsChange]);
+
+  useEffect(() => {
+    if (!native) return;
+    let cancelled = false;
+    isSignedIn()
+      .then(signedIn => { if (!cancelled) setConnected(signedIn); })
+      .catch(() => { if (!cancelled) setConnected(false); });
+    return () => { cancelled = true; };
+  }, [native]);
+
+  const clearSyncTimers = useCallback(() => {
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    if (errorClearTimer.current) clearTimeout(errorClearTimer.current);
+    retryTimer.current = null;
+    errorClearTimer.current = null;
+  }, []);
+
+  const doSync = useCallback(async () => {
+    if (!connected || !Capacitor.isNativePlatform()) return;
+    if (syncBusy.current) {
+      syncPending.current = true;
+      return;
+    }
+    syncBusy.current = true;
+    syncPending.current = false;
+    clearSyncTimers();
+    setSyncStatus('syncing');
+    const snapshot = periodsRef.current.map(serializeEntry);
+    const snapshotByStart = new Map(snapshot.map(entry => [entry.start, entry]));
+    try {
+      const result = await runSync({
+        periods: snapshot,
+        deletedEventIds: deletedEventIdsRef.current,
+      });
+      const parsedPeriods = result.periods.map(parseStoredEntry).filter(Boolean);
+      setPeriods(prev => mergeSyncResult(prev, snapshotByStart, parsedPeriods));
+      setDeletedEventIds(ids => filterClearedTombstones(ids, result.clearedTombstones));
+      setLastSyncedAt(result.syncedAt);
+      retryCount.current = 0;
+      setSyncStatus('idle');
+    } catch (error) {
+      if (error instanceof AuthRequired) {
+        setSyncStatus('auth');
+        setConnected(false);
+      } else {
+        setSyncStatus('error');
+        const delay = Math.min(30000 * (2 ** retryCount.current), 5 * 60000);
+        retryCount.current += 1;
+        retryTimer.current = setTimeout(doSync, delay);
+        errorClearTimer.current = setTimeout(() => setSyncStatus(status => (
+          status === 'error' ? 'idle' : status
+        )), 5000);
+      }
+    } finally {
+      syncBusy.current = false;
+      if (syncPending.current) {
+        syncPending.current = false;
+        doSync();
+      }
+    }
+  }, [clearSyncTimers, connected]);
+
+  useEffect(() => {
+    if (connected) doSync();
+    // doSync intentionally stays out of this dependency list; this effect is only
+    // the connect/open trigger, while data-change syncs are handled below.
+  }, [connected]);
+
+  useEffect(() => {
+    if (!connected) return undefined;
+    const timer = setTimeout(doSync, 5000);
+    return () => clearTimeout(timer);
+  }, [periods, deletedEventIds, connected, doSync]);
+
+  useEffect(() => () => clearSyncTimers(), [clearSyncTimers]);
+
+  useEffect(() => {
+    if (!connected) {
+      clearSyncTimers();
+      retryCount.current = 0;
+    }
+  }, [connected, clearSyncTimers]);
+
+  const handleConnect = useCallback(async () => {
+    if (!native) return;
+    setSignInError(false);
+    try {
+      await signIn(SYNC_CONFIG.clientId);
+      setConnected(true);
+      setSyncStatus('idle');
+    } catch {
+      setSignInError(true);
+      setSyncStatus('auth');
+    }
+  }, [native]);
+
+  const handleSignOut = useCallback(async () => {
+    await signOut().catch(() => {});
+    setConnected(false);
+    setSyncStatus('idle');
+  }, []);
 
   // auto-compute cycle len when in auto mode
   useEffect(() => {
     if (cycleMode !== 'auto') return;
     if (periods.length < 2) { setCycleLen(27); return; }
-    const sorted = [...periods].sort((a,b) => a - b);
+    const sorted = sortEntries(periods);
     const gaps = [];
-    for (let i = 1; i < sorted.length; i++) gaps.push(diffDays(sorted[i], sorted[i-1]));
+    for (let i = 1; i < sorted.length; i++) gaps.push(diffDays(sorted[i].start, sorted[i-1].start));
     const recent = gaps.slice(-5);
     recent.sort((a,b) => a-b);
     const med = recent[Math.floor(recent.length/2)];
     setCycleLen(Math.round(med));
   }, [periods, cycleMode]);
 
+  useEffect(() => {
+    if (periodMode !== 'auto') return;
+    setPeriodLen(autoPeriodLen(periods) ?? 5);
+  }, [periods, periodMode]);
+
   const last = periods.length ? periods[periods.length - 1] : null;
-  const next = last ? addDays(last, cycleLen) : null;
+  const next = last ? addDays(last.start, cycleLen) : null;
   const late = next ? diffDays(next, todayBase) < 0 : false;
   const empty = !last;
 
@@ -692,14 +1175,46 @@ function CycleApp({
       setBloom({ x: r.left + r.width/2 - sr.left, y: r.top + r.height/2 - sr.top });
     }
     setTimeout(() => setBloom(null), 1200);
-    if (calSync) { setUnsynced(true); setTimeout(() => setUnsynced(false), 2400); }
+  };
+
+  const handleExport = async () => {
+    const json = JSON.stringify(buildBackupState({
+      periods,
+      deletedEventIds,
+      lastSyncedAt,
+      cycleLen,
+      cycleMode,
+      periodLen,
+      periodMode,
+      calSync: connected,
+      dark,
+      accent,
+      font,
+    }), null, 2);
+    if (Capacitor.isNativePlatform()) {
+      await Share.share({ title: 'Cycle data', text: json }).catch(() => {});
+    } else {
+      try {
+        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(json);
+          return;
+        }
+      } catch {
+        // Fall through to a file download so the user still gets a backup.
+      }
+      try {
+        downloadJsonBackup(json);
+      } catch {
+        // Export is best-effort on locked-down browsers and webviews.
+      }
+    }
   };
 
   // history rows (newest first), with cycle length to previous logged
   const historyRows = useMemo(() => {
-    const sorted = [...periods].sort((a,b) => a - b);
-    return sorted.map((d, i) => ({
-      date: d, idx: i, gap: i > 0 ? diffDays(d, sorted[i-1]) : null,
+    const sorted = sortEntries(periods);
+    return sorted.map((entry, i) => ({
+      entry, idx: periods.indexOf(entry), gap: i > 0 ? diffDays(entry.start, sorted[i-1].start) : null,
     })).reverse();
   }, [periods]);
 
@@ -733,8 +1248,8 @@ function CycleApp({
 
       {/* scroll content */}
       <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
-        {/* unsynced indicator */}
-        {unsynced && (
+        {/* sync indicator */}
+        {(syncStatus === 'syncing' || syncStatus === 'error') && (
           <div style={{
             position: 'absolute', top: 8, left: 24, zIndex: 5,
             display: 'flex', alignItems: 'center', gap: 6,
@@ -742,7 +1257,7 @@ function CycleApp({
             fontFamily: 'var(--font-ui)', fontSize: 12, color: c.textSecondary,
             animation: 'fadeInDown 280ms ease-out',
           }}>
-            <CloudOff c={c.textSecondary} s={13}/> Syncing…
+            <CloudOff c={c.textSecondary} s={13}/> {syncStatus === 'syncing' ? 'Syncing…' : 'Sync failed'}
           </div>
         )}
 
@@ -790,7 +1305,7 @@ function CycleApp({
                 }}>
                   <div>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 500, color: c.textPrimary, letterSpacing: -0.2 }}>
-                      {fmtShort(r.date)}, {r.date.getFullYear()}
+                      {fmtShort(r.entry.start)}, {r.entry.start.getFullYear()}
                     </div>
                   </div>
                   {r.gap ? (
@@ -828,20 +1343,37 @@ function CycleApp({
       {!native && <NavPill c={c}/>}
 
       <SettingsSheet c={c} open={settingsOpen} onClose={() => setSettingsOpen(false)}
+        native={native}
         cycleLen={cycleLen} setCycleLen={(v) => { setCycleLen(v); setCycleMode('manual'); }}
         cycleMode={cycleMode} setCycleMode={setCycleMode}
         periodLen={periodLen} setPeriodLen={(v) => { setPeriodLen(v); setPeriodMode('manual'); }}
         periodMode={periodMode} setPeriodMode={setPeriodMode}
-        calSync={calSync} setCalSync={setCalSync}
-        calAccount="cycle.user@gmail.com"
+        connected={connected}
+        syncStatus={syncStatus}
+        lastSyncedAt={lastSyncedAt}
+        signInError={signInError}
+        onConnect={handleConnect}
+        onSyncNow={doSync}
+        onSignOut={handleSignOut}
+        onExport={handleExport}
+        onImportOpen={() => { setSettingsOpen(false); setImportOpen(true); }}
       />
 
+      <ImportModal c={c} open={importOpen} onClose={() => setImportOpen(false)}
+        onImport={(entries) => setPeriods(p => mergeImportedPeriods(p, entries))}/>
+
       {editIndex !== null && periods[editIndex] && (
-        <EditLastModal c={c} open onClose={() => setEditIndex(null)} last={periods[editIndex]} periodLength={periodLen}
-          onDelete={() => { setPeriods(p => removePeriodAt(p, editIndex)); setEditIndex(null); }}
+        <EditLastModal c={c} open onClose={() => setEditIndex(null)} entry={periods[editIndex]} periodLength={periodLen}
+          onDelete={() => {
+            const ids = collectEventIds(periods[editIndex]);
+            if (ids.length) setDeletedEventIds(existing => [...existing, ...ids]);
+            setPeriods(p => removePeriodAt(p, editIndex));
+            setEditIndex(null);
+          }}
           onEditDate={(date) => setPeriods(p => setPeriodDate(p, editIndex, date))}
-          minDate={editIndex > 0 ? addDays(periods[editIndex - 1], 1) : null}
-          maxDate={editIndex < periods.length - 1 ? addDays(periods[editIndex + 1], -1) : addDays(todayBase, 7)}/>
+          onEditEnd={(end) => setPeriods(p => setPeriodEnd(p, editIndex, end))}
+          minDate={editIndex > 0 ? addDays(periods[editIndex - 1].start, 1) : null}
+          maxDate={editIndex < periods.length - 1 ? addDays(periods[editIndex + 1].start, -1) : addDays(todayBase, 7)}/>
       )}
 
       <Bloom c={c} show={!!bloom} x={bloom?.x} y={bloom?.y}/>
@@ -849,5 +1381,10 @@ function CycleApp({
   );
 }
 
-export { LIGHT, DARK, loadStoredState, saveStoredState, hasPeriodOn, addPeriodEntry, setPeriodDate, removePeriodAt };
+export {
+  LIGHT, DARK, loadStoredState, saveStoredState, makeEntry, hasPeriodOn,
+  addPeriodEntry, setPeriodDate, setPeriodEnd, removePeriodAt, collectEventIds,
+  autoPeriodLen, parseStoredEntry, serializeEntry,
+  buildBackupState, mergeImportedPeriods, mergeSyncResult, filterClearedTombstones, syncSubtitle,
+};
 export default CycleApp;
