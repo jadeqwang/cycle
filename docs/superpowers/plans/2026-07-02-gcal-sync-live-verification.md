@@ -157,7 +157,7 @@ Expected: both match (template `clientId` field; `manifestPlaceholders = [oauthS
 
 > Task 3 Steps 1-2 verified 2026-07-03: Created `docs/google-cloud-setup.md` with the reviewed setup checklist. Sanity checks matched `src/sync-config.example.js:4` (`clientId`) and `android/app/build.gradle:13` (`OAUTH_SCHEME` manifest placeholder).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/google-cloud-setup.md
