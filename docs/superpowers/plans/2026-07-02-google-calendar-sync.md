@@ -1317,7 +1317,7 @@ Also update the privacy footer text to: `Your data stays on this device\nand in 
 
 - [x] **Step 3: Tests + build** — `npx vitest run` → PASS (no component tests exist; pure modules unaffected). `npm run build` → OK. `npm run cap:sync && cd android && ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleDebug --no-daemon` → BUILD SUCCESSFUL.
 
-- [ ] **Step 4: Runtime verify what's verifiable without credentials (browser):** Settings shows the disabled "Available in the Android app" sync row on web; import/export still work; no console errors. On the emulator: the Connect button appears; tapping it with the placeholder client id opens the browser to a Google error page — that's the expected pre-setup behavior; back out cleanly, app doesn't crash.
+- [x] **Step 4: Runtime verify what's verifiable without credentials (browser):** Settings shows the disabled "Available in the Android app" sync row on web; import/export still work; no console errors. On the emulator: the Connect button appears; tapping it with the placeholder client id opens the browser to a Google error page — that's the expected pre-setup behavior; back out cleanly, app doesn't crash.
 
 - [x] **Step 5: Commit**
 

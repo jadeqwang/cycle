@@ -17,6 +17,14 @@
 - Start from `main` (`git checkout main && git pull`), then create a working branch: `git checkout -b gcal-sync-verification`.
 - **Do not run two agents/sessions that write this working tree at the same time** — a concurrent-write collision already silently reverted a change once (see round-2 fixes plan).
 
+## Resume notes
+
+> Progress saved 2026-07-02: Work is in isolated worktree `.worktrees/gcal-sync-verification` on branch `gcal-sync-verification`. The parent checkout on `main` has commit `534f2fb` (`Ignore local worktrees`) because `.worktrees/` had to be added to `.gitignore` before creating the project-local worktree. In the worktree, `src/sync-config.js` was created locally by copying `src/sync-config.example.js` so tests/dev server can run; it is gitignored and must not be committed. Baseline in the worktree: `npx vitest run` passed with 51 tests.
+>
+> Task 1 status: completed 2026-07-02 after Jade added icons under `/icons`. Added an explicit favicon link in `index.html`, copied the new icon assets into this worktree, and added a small regression test for the favicon declaration. `npx vitest run` now passes with 52 tests. Browser automation reran against Vite at `http://localhost:5174/` (5173 was already occupied): Settings opened; web Google Calendar row showed subtitle "Available in the Android app"; Connect button was visible but disabled; scratch/default Export produced schema 2 JSON with a `periods` array; synthetic Import made an entry visible in history; browser console and network had no errors; screenshot captured at `/tmp/cycle-task1/settings-sheet.png`. The Vite dev server started for Task 1 was stopped.
+>
+> Current uncommitted work in `.worktrees/gcal-sync-verification`: this plan file, `index.html`, new `icons/`, and new `src/index-html.test.js`. Do not commit yet unless following the plan's Task 2 Step 4 commit point; Task 2 is next. Next session should start in `.worktrees/gcal-sync-verification`, confirm `src/sync-config.js` still exists locally (gitignored placeholder copy), then run Task 2 emulator smoke test exactly as written. After both Task 1 and Task 2 pass, check off Task 8 Step 4 in `docs/superpowers/plans/2026-07-02-google-calendar-sync.md` and commit the docs/icon/favicon/test changes per the plan.
+
 ## Known deferred items (do NOT implement; listed so they aren't "discovered" as bugs)
 
 - An entry **deleted** while a sync is in flight is resurrected by the sync result (tombstones are cleared unconditionally by `planSync`). Accepted, deferred.
@@ -34,12 +42,12 @@
 - Consumes: the dev server (`npm run dev`, serves on 0.0.0.0).
 - Produces: a pass/fail note per checklist item, appended to this plan file under this task.
 
-- [ ] **Step 1: Start the dev server**
+- [x] **Step 1: Start the dev server**
 
 Run: `npm run dev`
 Expected: Vite prints a local URL (default `http://localhost:5173/`).
 
-- [ ] **Step 2: Verify in a browser** (use browser automation or Jade's Chrome; capture a screenshot of the settings sheet):
+- [x] **Step 2: Verify in a browser** (use browser automation or Jade's Chrome; capture a screenshot of the settings sheet):
 
 1. Open the app → tap the gear → Settings sheet opens.
 2. The Google Calendar sync row is present but **disabled**, subtitle "Available in the Android app". No Connect button works on web.
@@ -47,9 +55,13 @@ Expected: Vite prints a local URL (default `http://localhost:5173/`).
 4. Import: paste a small synthetic backup, e.g. `{"schema":2,"periods":[{"start":"2026-06-01","end":"2026-06-05","startEventId":null,"endEventId":null,"updatedAt":"2026-06-01T00:00:00Z"}]}` → entry appears in history.
 5. Browser console: no errors (warnings from Capacitor plugins on web are OK; anything red is not).
 
-- [ ] **Step 3: Record results**
+- [x] **Step 3: Record results**
 
 Append `> Task 1 verified YYYY-MM-DD: <notes>` under this task in this plan file. Any failure → stop, use superpowers:systematic-debugging, file the fix as a new task.
+
+> Task 1 attempted 2026-07-02: Dev server started successfully at `http://localhost:5173/`. Browser automation with system Chrome verified Settings opens; Google Calendar sync row is present on web with subtitle "Available in the Android app"; Export produced schema 2 JSON with a `periods` array using scratch/default web data; Import of a small synthetic backup made an entry visible in history; screenshot captured at `/tmp/cycle-task1/settings-sheet.png`. Blocked/failing checklist item: browser console had one red error for Chrome's automatic `http://localhost:5173/favicon.ico` request returning 404. No application/page exceptions observed. Follow-up task: add/provide a favicon or otherwise eliminate the favicon 404 so the console check is fully clean, then rerun Task 1.
+>
+> Task 1 verified 2026-07-02: Added the new `/icons` assets and an explicit `<link rel="icon" href="/icons/favicon.ico" />`; regression test `src/index-html.test.js` confirms the declaration. `npx vitest run` passed with 52 tests. Reran browser automation with system Chrome against Vite at `http://localhost:5174/` (5173 was occupied): Settings sheet opens; Google Calendar sync row is present on web with subtitle "Available in the Android app"; Connect is disabled on web; Export produced schema 2 JSON with a `periods` array using scratch/default data; Import of the synthetic backup made an entry visible in history; browser console and network had no errors; screenshot captured at `/tmp/cycle-task1/settings-sheet.png`.
 
 ### Task 2: Emulator runtime smoke test (Task 8 Step 4, emulator half)
 
@@ -60,7 +72,7 @@ Append `> Task 1 verified YYYY-MM-DD: <notes>` under this task in this plan file
 - Consumes: AVD `cycle-test`; APK at `android/app/build/outputs/apk/debug/app-debug.apk`.
 - Produces: pass/fail notes appended under this task.
 
-- [ ] **Step 1: Build and install on the emulator**
+- [x] **Step 1: Build and install on the emulator**
 
 ```bash
 npm run cap:sync
@@ -73,18 +85,20 @@ cd android && ANDROID_HOME=$HOME/Android/Sdk ./gradlew assembleDebug --no-daemon
 
 Expected: app launches to the dashboard.
 
-- [ ] **Step 2: Verify pre-credential behavior** (screenshots: `~/Android/Sdk/platform-tools/adb exec-out screencap -p > /tmp/claude/shot-N.png`):
+- [x] **Step 2: Verify pre-credential behavior** (screenshots: `~/Android/Sdk/platform-tools/adb exec-out screencap -p > /tmp/claude/shot-N.png`):
 
 1. Settings → the sync row shows a **Connect** button (not the disabled web row).
 2. Tap Connect with the placeholder client id (`REPLACE_ME…`) → system browser opens to a Google error page ("invalid client" or similar). **This is the expected pre-setup behavior.**
 3. Back out to the app → no crash, Settings still responsive, subtitle shows the disconnected state (inline "Sign-in didn't complete" note is acceptable).
 4. Log a period, kill the app (`adb shell am force-stop com.jade.cycle`), relaunch → the entry persisted.
 
-- [ ] **Step 3: Record results**
+- [x] **Step 3: Record results**
 
 Append `> Task 2 verified YYYY-MM-DD: <notes>` under this task. Check off Task 8 Step 4 in `docs/superpowers/plans/2026-07-02-google-calendar-sync.md` (line ~1314) once both Task 1 and Task 2 pass.
 
-- [ ] **Step 4: Commit the checkbox/notes update**
+> Task 2 verified 2026-07-03: `npm run cap:sync` completed cleanly. Initial Gradle build failed because the shell already exported `ANDROID_HOME`/`ANDROID_SDK_ROOT=/usr/lib/android-sdk` while the plan command overrode only `ANDROID_HOME` to `~/Android/Sdk`; reran with both variables set to `~/Android/Sdk`, then escalated for normal `~/.gradle` cache access, and `assembleDebug` completed with BUILD SUCCESSFUL. Launched headless AVD `cycle-test`, installed `android/app/build/outputs/apk/debug/app-debug.apk`, and launched `com.jade.cycle`. Screenshots captured under `/tmp/claude/`: dashboard, native Settings, OAuth placeholder error, returned Settings, and post-relaunch persistence. Settings showed a native Google Calendar sync row with enabled Connect button and subtitle "Two-way sync with your Period Tracker calendar". Tapping Connect with placeholder `REPLACE_ME.apps.googleusercontent.com` opened Chrome to `accounts.google.com` with Google `400. That's an error.` / malformed request, after dismissing Chrome first-run setup. Closing the custom tab returned to Settings without crash; row remained disconnected with Connect available. Logged July 3, force-stopped the app, relaunched, and the dashboard/history still showed the July 3 entry plus the prior July 2 entry.
+
+- [x] **Step 4: Commit the checkbox/notes update**
 
 ```bash
 git add docs/superpowers/plans/
@@ -99,7 +113,7 @@ git commit -m "Record runtime verification of sync UI without credentials"
 **Interfaces:**
 - Produces: the checklist Jade follows in Task 4. Content below is final — copy verbatim (it was already reviewed as part of the original plan).
 
-- [ ] **Step 1: Create the file with exactly this content:**
+- [x] **Step 1: Create the file with exactly this content:**
 
 ```markdown
 # One-time Google Cloud setup for Cycle sync (~10 min)
@@ -136,10 +150,12 @@ git commit -m "Record runtime verification of sync UI without credentials"
     prediction replaces these projections.
 ```
 
-- [ ] **Step 2: Sanity-check the two config touchpoints still exist**
+- [x] **Step 2: Sanity-check the two config touchpoints still exist**
 
 Run: `grep -n "clientId" src/sync-config.example.js && grep -n "OAUTH_SCHEME" android/app/build.gradle`
 Expected: both match (template `clientId` field; `manifestPlaceholders = [oauthScheme: project.findProperty('OAUTH_SCHEME') ?: 'com.jade.cycle.unset']`).
+
+> Task 3 Steps 1-2 verified 2026-07-03: Created `docs/google-cloud-setup.md` with the reviewed setup checklist. Sanity checks matched `src/sync-config.example.js:4` (`clientId`) and `android/app/build.gradle:13` (`OAUTH_SCHEME` manifest placeholder).
 
 - [ ] **Step 3: Commit**
 
