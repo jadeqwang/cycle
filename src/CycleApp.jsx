@@ -69,9 +69,12 @@ function syncSubtitle({ native, connected, syncStatus, lastSyncedAt }) {
   if (!native) return 'Available in the Android app';
   if (syncStatus === 'auth') return 'Reconnect needed';
   if (!connected) return 'Two-way sync with your Period Tracker calendar';
-  if (syncStatus === 'syncing') return 'Syncing...';
-  if (syncStatus === 'error') return 'Sync failed - will retry';
-  return lastSyncedAt ? `Synced - ${relDays(new Date(lastSyncedAt))}` : 'Connected to Period Tracker';
+  if (syncStatus === 'syncing') return 'Syncing…';
+  if (syncStatus === 'error') return 'Sync failed — will retry';
+  if (!lastSyncedAt) return 'Connected to Period Tracker';
+  const synced = new Date(lastSyncedAt);
+  const localDay = new Date(synced.getFullYear(), synced.getMonth(), synced.getDate());
+  return `Synced · ${relDays(localDay)}`;
 }
 
 function weekdayMonthDay(d) {
@@ -187,6 +190,40 @@ function serializeEntry(entry) {
     endEventId: entry.endEventId || null,
     updatedAt: entry.updatedAt,
   };
+}
+
+function sameSerializedEntries(a, b) {
+  return JSON.stringify(a.map(serializeEntry)) === JSON.stringify(b.map(serializeEntry));
+}
+
+// snapshotByStart: serialized start -> serialized entry, captured from the exact
+// periods handed to runSync, so mid-flight edits are detectable via updatedAt.
+function mergeSyncResult(prev, snapshotByStart, resultPeriods) {
+  const prevByStart = new Map(prev.map(entry => [serializeDate(entry.start), entry]));
+  const resultByStart = new Map(resultPeriods.map(entry => [serializeDate(entry.start), entry]));
+  const merged = resultPeriods.map(entry => {
+    const start = serializeDate(entry.start);
+    const snapshotEntry = snapshotByStart.get(start);
+    const prevEntry = prevByStart.get(start);
+    if (snapshotEntry && prevEntry && prevEntry.updatedAt > snapshotEntry.updatedAt) {
+      // Edited while the sync was in flight: the local edit wins, but the sync
+      // result's event ids reflect remote reality (created/adopted/cleared), so
+      // adopt them — the next sync then patches instead of duplicating.
+      return { ...prevEntry, startEventId: entry.startEventId, endEventId: entry.endEventId };
+    }
+    return entry;
+  });
+  merged.push(...prev.filter(entry => {
+    const start = serializeDate(entry.start);
+    return !snapshotByStart.has(start) && !resultByStart.has(start);
+  }));
+  const sorted = sortEntries(merged);
+  return sameSerializedEntries(prev, sorted) ? prev : sorted;
+}
+
+function filterClearedTombstones(ids, clearedTombstones) {
+  const next = ids.filter(id => !clearedTombstones.includes(id));
+  return next.length === ids.length ? ids : next;
 }
 
 function buildBackupState(state) {
@@ -990,6 +1027,14 @@ function CycleApp({
   const [editIndex, setEditIndex] = useState(null);
   const buttonRef = useRef(null);
   const syncBusy = useRef(false);
+  const syncPending = useRef(false);
+  const retryTimer = useRef(null);
+  const errorClearTimer = useRef(null);
+  const retryCount = useRef(0);
+  const periodsRef = useRef(periods);
+  const deletedEventIdsRef = useRef(deletedEventIds);
+  periodsRef.current = periods;
+  deletedEventIdsRef.current = deletedEventIds;
 
   useEffect(() => {
     onSettingsChange?.({ periods, deletedEventIds, lastSyncedAt, cycleLen, cycleMode, periodLen, periodMode, calSync: connected });
@@ -1004,29 +1049,62 @@ function CycleApp({
     return () => { cancelled = true; };
   }, [native]);
 
+  const clearSyncTimers = useCallback(() => {
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+    if (errorClearTimer.current) clearTimeout(errorClearTimer.current);
+    retryTimer.current = null;
+    errorClearTimer.current = null;
+  }, []);
+
   const doSync = useCallback(async () => {
-    if (!connected || syncBusy.current || !Capacitor.isNativePlatform()) return;
+    if (!connected || !Capacitor.isNativePlatform()) return;
+    if (syncBusy.current) {
+      syncPending.current = true;
+      return;
+    }
     syncBusy.current = true;
+    syncPending.current = false;
+    clearSyncTimers();
     setSyncStatus('syncing');
+    const snapshot = periodsRef.current.map(serializeEntry);
+    const snapshotByStart = new Map(snapshot.map(entry => [entry.start, entry]));
     try {
       const result = await runSync({
-        periods: periods.map(serializeEntry),
-        deletedEventIds,
+        periods: snapshot,
+        deletedEventIds: deletedEventIdsRef.current,
       });
-      setPeriods(sortEntries(result.periods.map(parseStoredEntry).filter(Boolean)));
-      setDeletedEventIds(ids => ids.filter(id => !result.clearedTombstones.includes(id)));
+      const parsedPeriods = result.periods.map(parseStoredEntry).filter(Boolean);
+      setPeriods(prev => mergeSyncResult(prev, snapshotByStart, parsedPeriods));
+      setDeletedEventIds(ids => filterClearedTombstones(ids, result.clearedTombstones));
       setLastSyncedAt(result.syncedAt);
+      retryCount.current = 0;
       setSyncStatus('idle');
     } catch (error) {
-      setSyncStatus(error instanceof AuthRequired ? 'auth' : 'error');
-      if (error instanceof AuthRequired) setConnected(false);
+      if (error instanceof AuthRequired) {
+        setSyncStatus('auth');
+        setConnected(false);
+      } else {
+        setSyncStatus('error');
+        const delay = Math.min(30000 * (2 ** retryCount.current), 5 * 60000);
+        retryCount.current += 1;
+        retryTimer.current = setTimeout(doSync, delay);
+        errorClearTimer.current = setTimeout(() => setSyncStatus(status => (
+          status === 'error' ? 'idle' : status
+        )), 5000);
+      }
     } finally {
       syncBusy.current = false;
+      if (syncPending.current) {
+        syncPending.current = false;
+        doSync();
+      }
     }
-  }, [connected, periods, deletedEventIds]);
+  }, [clearSyncTimers, connected]);
 
   useEffect(() => {
     if (connected) doSync();
+    // doSync intentionally stays out of this dependency list; this effect is only
+    // the connect/open trigger, while data-change syncs are handled below.
   }, [connected]);
 
   useEffect(() => {
@@ -1034,6 +1112,15 @@ function CycleApp({
     const timer = setTimeout(doSync, 5000);
     return () => clearTimeout(timer);
   }, [periods, deletedEventIds, connected, doSync]);
+
+  useEffect(() => () => clearSyncTimers(), [clearSyncTimers]);
+
+  useEffect(() => {
+    if (!connected) {
+      clearSyncTimers();
+      retryCount.current = 0;
+    }
+  }, [connected, clearSyncTimers]);
 
   const handleConnect = useCallback(async () => {
     if (!native) return;
@@ -1170,7 +1257,7 @@ function CycleApp({
             fontFamily: 'var(--font-ui)', fontSize: 12, color: c.textSecondary,
             animation: 'fadeInDown 280ms ease-out',
           }}>
-            <CloudOff c={c.textSecondary} s={13}/> {syncStatus === 'syncing' ? 'Syncing...' : 'Sync failed'}
+            <CloudOff c={c.textSecondary} s={13}/> {syncStatus === 'syncing' ? 'Syncing…' : 'Sync failed'}
           </div>
         )}
 
@@ -1298,6 +1385,6 @@ export {
   LIGHT, DARK, loadStoredState, saveStoredState, makeEntry, hasPeriodOn,
   addPeriodEntry, setPeriodDate, setPeriodEnd, removePeriodAt, collectEventIds,
   autoPeriodLen, parseStoredEntry, serializeEntry,
-  buildBackupState, mergeImportedPeriods,
+  buildBackupState, mergeImportedPeriods, mergeSyncResult, filterClearedTombstones, syncSubtitle,
 };
 export default CycleApp;

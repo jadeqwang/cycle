@@ -1,8 +1,9 @@
-import { afterEach, describe, test, expect } from 'vitest';
+import { afterEach, describe, test, expect, vi } from 'vitest';
 import {
   hasPeriodOn, addPeriodEntry, setPeriodDate, setPeriodEnd, removePeriodAt,
   makeEntry, collectEventIds, autoPeriodLen, parseStoredEntry,
   serializeEntry, buildBackupState, loadStoredState, saveStoredState, mergeImportedPeriods,
+  mergeSyncResult, filterClearedTombstones, syncSubtitle,
 } from './CycleApp.jsx';
 
 const d = (y, m, day) => new Date(y, m - 1, day);
@@ -29,11 +30,37 @@ function installLocalStorage(initial = {}) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   if (originalWindow === undefined) {
     delete globalThis.window;
   } else {
     globalThis.window = originalWindow;
   }
+});
+
+describe('syncSubtitle', () => {
+  test('formats sync state text with local-day last sync dates', () => {
+    vi.setSystemTime(new Date('2026-07-02T12:00:00.000Z'));
+
+    expect(syncSubtitle({
+      native: true,
+      connected: true,
+      syncStatus: 'syncing',
+      lastSyncedAt: null,
+    })).toBe('Syncing…');
+    expect(syncSubtitle({
+      native: true,
+      connected: true,
+      syncStatus: 'error',
+      lastSyncedAt: null,
+    })).toBe('Sync failed — will retry');
+    expect(syncSubtitle({
+      native: true,
+      connected: true,
+      syncStatus: 'idle',
+      lastSyncedAt: '2026-07-02T11:00:00.000Z',
+    })).toBe('Synced · today');
+  });
 });
 
 describe('hasPeriodOn', () => {
@@ -367,6 +394,88 @@ describe('mergeImportedPeriods', () => {
       d(2026, 7, 2),
       d(2026, 7, 30),
     ].map(x => x.getTime()));
+  });
+});
+
+describe('mergeSyncResult', () => {
+  const snapshotOf = (...entries) => new Map(entries.map(e => {
+    const s = serializeEntry(e);
+    return [s.start, s];
+  }));
+
+  test('keeps an end date set while the sync was in flight, adopting synced event ids', () => {
+    const editedDuringSync = entry(d(2026, 7, 2), {
+      end: d(2026, 7, 6), updatedAt: '2026-07-02T12:00:05Z',
+    });
+    const synced = entry(d(2026, 7, 2), { startEventId: 'synced-start' });
+    const result = mergeSyncResult(
+      [editedDuringSync],
+      snapshotOf(entry(d(2026, 7, 2))),
+      [synced],
+    );
+
+    expect(result).toEqual([entry(d(2026, 7, 2), {
+      end: d(2026, 7, 6), updatedAt: '2026-07-02T12:00:05Z', startEventId: 'synced-start',
+    })]);
+  });
+
+  test('still adopts remote changes when the entry was not edited mid-flight', () => {
+    const synced = entry(d(2026, 7, 2), {
+      end: d(2026, 7, 7), startEventId: 'synced-start', endEventId: 'synced-end',
+      updatedAt: '2026-07-01T00:00:00Z',
+    });
+    const result = mergeSyncResult(
+      [entry(d(2026, 7, 2))],
+      snapshotOf(entry(d(2026, 7, 2))),
+      [synced],
+    );
+
+    expect(result).toEqual([synced]);
+  });
+
+  test('preserves entries created after the sync snapshot', () => {
+    const synced = entry(d(2026, 7, 2), { startEventId: 'synced-start' });
+    const newDuringSync = entry(d(2026, 7, 10));
+    const result = mergeSyncResult(
+      [entry(d(2026, 7, 2)), newDuringSync],
+      snapshotOf(entry(d(2026, 7, 2))),
+      [synced],
+    );
+
+    expect(result).toEqual([synced, newDuringSync]);
+  });
+
+  test('returns the previous array when sync result is unchanged', () => {
+    const current = [entry(d(2026, 7, 2), { startEventId: 'start-id' })];
+    const result = mergeSyncResult(
+      current,
+      snapshotOf(current[0]),
+      [entry(d(2026, 7, 2), { startEventId: 'start-id' })],
+    );
+
+    expect(result).toBe(current);
+  });
+});
+
+describe('filterClearedTombstones', () => {
+  test('returns the same array with empty cleared tombstones', () => {
+    const ids = ['start-id', 'end-id'];
+
+    expect(filterClearedTombstones(ids, [])).toBe(ids);
+  });
+
+  test('returns the same array with no overlap', () => {
+    const ids = ['start-id', 'end-id'];
+
+    expect(filterClearedTombstones(ids, ['other-id'])).toBe(ids);
+  });
+
+  test('returns a filtered new array with overlap', () => {
+    const ids = ['start-id', 'end-id'];
+    const result = filterClearedTombstones(ids, ['start-id']);
+
+    expect(result).toEqual(['end-id']);
+    expect(result).not.toBe(ids);
   });
 });
 

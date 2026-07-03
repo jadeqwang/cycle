@@ -1249,6 +1249,8 @@ export async function runSync({ periods, deletedEventIds }) {
 }
 ```
 
+Correction note: The `isoDate(now)`/`isoDate(now +/- ...)` sample above is UTC-based and can cross local day boundaries incorrectly. A future implementation should compute `todayStr`, `timeMin`'s two-year fallback, and `timeMax` from local calendar dates, matching the app's local `serializeDate` behavior, so sync does not pull tomorrow's recurring projection or drop same-day local entries.
+
 - [x] **Step 2: Wire into `CycleApp`.** Replace the fake calendar-sync section in `SettingsSheet` and the `calSync`/`unsynced` plumbing:
 
 State in `CycleApp`:
@@ -1287,6 +1289,8 @@ The sync runner (uses serialize/parse to cross the string boundary):
   }, [connected, periods, deletedEventIds]);
 ```
 
+Correction note: The direct `setPeriods(sortEntries(result.periods...))` in this sample can overwrite entries logged while sync is in flight, and always creating a fresh array can keep the debounced sync effect running forever. Re-execution should use a functional merge against `prev` that preserves entries absent from the sync input snapshot and returns `prev` when serialized content is unchanged.
+
 Triggers: `useEffect(() => { doSync(); }, [connected])` (on connect + mount) and a debounced effect on data changes:
 
 ```js
@@ -1296,6 +1300,8 @@ Triggers: `useEffect(() => { doSync(); }, [connected])` (on connect + mount) and
     return () => clearTimeout(t);
   }, [periods, deletedEventIds, connected]);
 ```
+
+Correction note: The debounce sample should settle after a successful sync. Pair it with the no-op-on-unchanged state update above, and do not let a busy sync drop triggers; record a pending request and re-run after the in-flight sync finishes.
 
 Include `lastSyncedAt` in the `onSettingsChange` payload (replacing the Task 2 pass-through) so it persists.
 
