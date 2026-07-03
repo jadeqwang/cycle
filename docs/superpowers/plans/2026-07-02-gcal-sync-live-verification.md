@@ -30,6 +30,7 @@
 - An entry **deleted** while a sync is in flight is resurrected by the sync result (tombstones are cleared unconditionally by `planSync`). Accepted, deferred.
 - Render-phase ref writes in `CycleApp.jsx` (`periodsRef.current = periods` in the component body). Accepted idiom, deferred.
 - Web builds intentionally show the sync row disabled ("Available in the Android app") — not a bug.
+- Nice-to-have privacy improvement: reduce Google Calendar OAuth breadth. Current scopes include `calendar.events`, which Google documents as event access on all calendars. Investigate switching to `calendar.events.owned` if the user owns the "Period Tracker" calendar, or migrating to an app-created secondary calendar with `calendar.app.created`; Google does not appear to offer an OAuth scope limited to one arbitrary selected calendar.
 
 ---
 
@@ -198,22 +199,30 @@ git commit -m "Point OAuth deep link at the real client id"
 
 Run through in order; capture adb screenshots where possible. **The safety property under test in items 1–2:** connecting must NOT create, move, or delete anything in her existing calendar, and must NOT import any future-dated projection.
 
-- [ ] 1. Import seed → history shows 40 entries, newest 2026-06-28. **No entry dated after local today.**
-- [ ] 2. Connect → Google consent screen → back in app, subtitle "Synced · today". Her calendar gains NO new events, and an exported backup now shows event ids on entries matching real calendar event ids (spot-check 2).
-- [ ] 3. Log a period backdated 2 days → within ~5 s + one manual "Sync now", a standalone "period start" all-day event appears in Google Calendar on that date.
-- [ ] 4. Set that entry's end date in the app → "period end" event appears in the calendar.
-- [ ] 5. Move a past "period start" event by one day in Google Calendar → "Sync now" in app → the entry's date updates to match.
-- [ ] 6. Delete the test entry in the app → both its events disappear from the calendar after sync.
-- [ ] 7. Kill + relaunch the app → data intact, sync reconnects silently (subtitle returns to "Synced · …" without re-consent).
-- [ ] 8. **Loop check (regression for round-2 fix):** leave the app open on Settings for 2 minutes after a sync → the "Syncing…" chip does NOT keep reappearing every ~5 s.
+- [x] 1. Import seed → history shows 40 entries, newest 2026-06-28. **No entry dated after local today.**
+- [x] 2. Connect → Google consent screen → back in app, subtitle "Synced · today". Her calendar gains NO new events, and an exported backup now shows event ids on entries matching real calendar event ids (spot-check 2).
+- [x] 3. Log a period backdated 2 days → within ~5 s + one manual "Sync now", a standalone "period start" all-day event appears in Google Calendar on that date.
+- [x] 4. Set that entry's end date in the app → "period end" event appears in the calendar.
+- [x] 5. Move a past "period start" event by one day in Google Calendar → "Sync now" in app → the entry's date updates to match.
+- [x] 6. Delete the test entry in the app → both its events disappear from the calendar after sync.
+- [x] 7. Kill + relaunch the app → data intact, sync reconnects silently (subtitle returns to "Synced · …" without re-consent).
+- [x] 8. **Loop check (regression for round-2 fix):** leave the app open on Settings for 2 minutes after a sync → the "Syncing…" chip does NOT keep reappearing every ~5 s.
 
-- [ ] **Step 2: Jade ends the two recurring series** (setup doc step 10) so projections stop accumulating. Then one final "Sync now" → entry count unchanged (ended past instances remain; the app never pulled the future ones).
+- [x] **Step 2: Jade ends the two recurring series** (setup doc step 10) so projections stop accumulating. Then one final "Sync now" → entry count unchanged (ended past instances remain; the app never pulled the future ones).
+
+> Task 5 item 1 verified 2026-07-03: Jade imported `period-import.json` on the phone after agent copied it to `/sdcard/Download/period-import.json` and injected the JSON into the focused Import field via ADB without printing file contents. Jade confirmed History shows 40 entries, newest 2026-06-28, and no future-dated entry beyond local today.
+>
+> Task 5 item 2 verified 2026-07-03: Initial Google consent was blocked until Jade enabled the Android OAuth client's advanced "custom URI scheme" setting. After consent, first sync failed because Google Calendar API was disabled for project `633413711929`; enabling the API resolved it. Cycle then showed `Synced · today`. Agent used the phone's stored OAuth token for status-only Calendar API spot checks without printing tokens, event ids, or health data; 3/3 sampled imported event ids matched real Calendar events. Jade confirmed Google Calendar gained no duplicate events and no unexpected moves/deletions occurred. Follow-up defect: the inline `Sign-in didn't complete` label can remain visible after later successful sign-in/sync and should be cleared on success.
+>
+> Task 5 items 3-8 verified 2026-07-03 by Jade on the live phone/calendar: a backdated test start created a standalone Google Calendar "period start" event; setting an end date created the matching "period end"; moving a past "period start" in Google Calendar and pressing Sync now updated Cycle; deleting the test entry in Cycle removed both calendar events; kill + relaunch preserved data and reconnected without re-consent; leaving Settings open for 2 minutes after sync did not show the repeating ~5 s "Syncing..." loop.
+>
+> Task 5 recurring-series cleanup verified 2026-07-03 by Jade: both future recurring "period start" and "period end" projection series were ended in Google Calendar, then final Sync now completed with entry count unchanged. This confirms ended past instances remain and Cycle did not import future projected events.
 
 ### Task 6: Wrap up
 
-- [ ] **Step 1:** Check off Task 9 in `docs/superpowers/plans/2026-07-02-google-calendar-sync.md`; append verification notes to this plan.
-- [ ] **Step 2:** `npx vitest run` (expect 51 passed) as a final regression gate.
-- [ ] **Step 3: Commit + merge**
+- [x] **Step 1:** Check off Task 9 in `docs/superpowers/plans/2026-07-02-google-calendar-sync.md`; append verification notes to this plan.
+- [x] **Step 2:** `npx vitest run` (expect 51 passed) as a final regression gate.
+- [x] **Step 3: Commit + merge**
 
 ```bash
 git add docs/

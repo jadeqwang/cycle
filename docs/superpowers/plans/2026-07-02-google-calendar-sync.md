@@ -1333,7 +1333,7 @@ git commit -m "Wire real two-way Google Calendar sync into settings"
 **Files:**
 - Create: `docs/google-cloud-setup.md`
 
-- [ ] **Step 1: Write `docs/google-cloud-setup.md`:**
+- [x] **Step 1: Write `docs/google-cloud-setup.md`:**
 
 ```markdown
 # One-time Google Cloud setup for Cycle sync (~10 min)
@@ -1370,7 +1370,7 @@ git commit -m "Wire real two-way Google Calendar sync into settings"
     prediction replaces these projections.
 ```
 
-- [ ] **Step 2: Live verification checklist (requires Jade's phone + credentials; run through it with her, capture adb screenshots where possible):**
+- [x] **Step 2: Live verification checklist (requires Jade's phone + credentials; run through it with her, capture adb screenshots where possible):**
 1. Import seed → 40 entries.
 2. Connect → Google consent screen → back in app, "Synced ·" appears; her calendar gains NO new events (all 40 entries linked by id — verify a couple of entries' event ids in the exported JSON match calendar event ids).
 3. Log a period in the app (e.g. backdate 2 days) → within ~5 s a standalone "period start" event appears in Google Calendar on that date.
@@ -1379,7 +1379,7 @@ git commit -m "Wire real two-way Google Calendar sync into settings"
 6. Delete the test entry in the app → both events disappear from the calendar.
 7. Kill + relaunch the app → data intact, sync reconnects silently.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add docs/google-cloud-setup.md
