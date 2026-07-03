@@ -221,7 +221,7 @@ Run through in order; capture adb screenshots where possible. **The safety prope
 ### Task 6: Wrap up
 
 - [x] **Step 1:** Check off Task 9 in `docs/superpowers/plans/2026-07-02-google-calendar-sync.md`; append verification notes to this plan.
-- [x] **Step 2:** `npx vitest run` (expect 51 passed) as a final regression gate.
+- [x] **Step 2:** `npx vitest run` (expect 51 passed) as a final regression gate. *(Actual: 52 — a favicon regression test was added during Task 1.)*
 - [x] **Step 3: Commit + merge**
 
 ```bash
