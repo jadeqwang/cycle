@@ -4,6 +4,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { Share } from '@capacitor/share';
+import { AuthRequired, isSignedIn, signIn, signOut } from './auth.js';
+import { runSync } from './run-sync.js';
+import { SYNC_CONFIG } from './sync-config.js';
 
 // ─── palette (from spec §7) ────────────────────────────────────────────────
 const LIGHT = {
@@ -60,6 +63,15 @@ function relDays(target, base = startOfToday()) {
   if (d === -1) return 'yesterday';
   if (d > 0) return `in ${d} days`;
   return `${-d} days ago`;
+}
+
+function syncSubtitle({ native, connected, syncStatus, lastSyncedAt }) {
+  if (!native) return 'Available in the Android app';
+  if (syncStatus === 'auth') return 'Reconnect needed';
+  if (!connected) return 'Two-way sync with your Period Tracker calendar';
+  if (syncStatus === 'syncing') return 'Syncing...';
+  if (syncStatus === 'error') return 'Sync failed - will retry';
+  return lastSyncedAt ? `Synced - ${relDays(new Date(lastSyncedAt))}` : 'Connected to Period Tracker';
 }
 
 function weekdayMonthDay(d) {
@@ -533,7 +545,30 @@ function StepperRow({ c, label, value, setValue, mode, setMode, min, max }) {
   );
 }
 
-function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, setCycleMode, periodLen, setPeriodLen, periodMode, setPeriodMode, calSync, setCalSync, calAccount, onExport, onImportOpen }) {
+function SettingsSheet({
+  c,
+  open,
+  onClose,
+  native,
+  cycleLen,
+  setCycleLen,
+  cycleMode,
+  setCycleMode,
+  periodLen,
+  setPeriodLen,
+  periodMode,
+  setPeriodMode,
+  connected,
+  syncStatus,
+  lastSyncedAt,
+  signInError,
+  onConnect,
+  onSyncNow,
+  onSignOut,
+  onExport,
+  onImportOpen,
+}) {
+  const syncText = syncSubtitle({ native, connected, syncStatus, lastSyncedAt });
   return (
     <>
       <div
@@ -570,16 +605,56 @@ function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, set
               <div>
                 <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.textPrimary }}>Google Calendar sync</div>
                 <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>
-                  {calSync ? calAccount : 'One-way push of logged & predicted dates'}
+                  {syncText}
                 </div>
               </div>
-              <Switch c={c} on={calSync} onChange={setCalSync}/>
+              {!connected ? (
+                <button
+                  onClick={onConnect}
+                  disabled={!native}
+                  style={{
+                    border: 'none', borderRadius: 100, padding: '8px 14px',
+                    background: native ? c.accent : c.surfaceDeep,
+                    color: native ? '#FFFEFB' : c.textFaint,
+                    fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 600,
+                    cursor: native ? 'pointer' : 'default',
+                  }}>
+                  Connect
+                </button>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    onClick={onSyncNow}
+                    disabled={syncStatus === 'syncing'}
+                    style={{
+                      border: 'none', background: 'transparent',
+                      color: syncStatus === 'syncing' ? c.textFaint : c.accentDeep,
+                      fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 600,
+                      cursor: syncStatus === 'syncing' ? 'default' : 'pointer',
+                    }}>
+                    Sync now
+                  </button>
+                  <button
+                    onClick={onSignOut}
+                    style={{
+                      border: 'none', background: 'transparent', color: c.textSecondary,
+                      fontFamily: 'var(--font-ui)', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                    }}>
+                    Sign out
+                  </button>
+                </div>
+              )}
             </div>
-            {calSync && (
+            {signInError && (
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.accentDeep, marginTop: 10 }}>
+                Sign-in didn't complete.
+              </div>
+            )}
+            {connected && (
               <button style={{
                 marginTop: 14, width: '100%', textAlign: 'left',
                 background: c.surface, border: 'none', borderRadius: 14, padding: '14px 16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'default',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ width: 32, height: 32, borderRadius: 8, background: c.accentMuted, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -587,10 +662,9 @@ function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, set
                   </div>
                   <div>
                     <div style={{ fontFamily: 'var(--font-ui)', fontSize: 14, color: c.textPrimary }}>Calendar</div>
-                    <div style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: c.textSecondary }}>Personal (primary)</div>
+                    <div style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: c.textSecondary }}>{SYNC_CONFIG.calendarName}</div>
                   </div>
                 </div>
-                <ChevronRight c={c.textFaint} s={18}/>
               </button>
             )}
           </div>
@@ -624,7 +698,7 @@ function SettingsSheet({ c, open, onClose, cycleLen, setCycleLen, cycleMode, set
 
           <div style={{ padding: '20px 0 8px', textAlign: 'center' }}>
             <div style={{ fontFamily: 'var(--font-ui)', fontSize: 12, color: c.textFaint, lineHeight: 1.5 }}>
-              All data stays on your device.<br/>No analytics. No tracking.
+              Your data stays on this device<br/>and in your own Google Calendar.
             </div>
           </div>
         </div>
@@ -887,7 +961,6 @@ function CycleApp({
   initialDeletedEventIds = [],
   initialLastSyncedAt = null,
   dark = false,
-  calSyncInit = false,
   accent = '#C4928A',
   accentDeep = '#A87770',
   accentMuted = '#E8D5D0',
@@ -906,18 +979,80 @@ function CycleApp({
   const [cycleMode, setCycleMode] = useState(initialCycleMode);
   const [periodLen, setPeriodLen] = useState(initialPeriodLen);
   const [periodMode, setPeriodMode] = useState(initialPeriodMode);
-  const [calSync, setCalSync] = useState(calSyncInit);
+  const [syncStatus, setSyncStatus] = useState('idle');
+  const [lastSyncedAt, setLastSyncedAt] = useState(initialLastSyncedAt);
+  const [connected, setConnected] = useState(false);
+  const [signInError, setSignInError] = useState(false);
   const [logOffset, setLogOffset] = useState(0);
   const [bloom, setBloom] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editIndex, setEditIndex] = useState(null);
-  const [unsynced, setUnsynced] = useState(false);
   const buttonRef = useRef(null);
+  const syncBusy = useRef(false);
 
   useEffect(() => {
-    onSettingsChange?.({ periods, deletedEventIds, lastSyncedAt: initialLastSyncedAt, cycleLen, cycleMode, periodLen, periodMode, calSync });
-  }, [periods, deletedEventIds, initialLastSyncedAt, cycleLen, cycleMode, periodLen, periodMode, calSync, onSettingsChange]);
+    onSettingsChange?.({ periods, deletedEventIds, lastSyncedAt, cycleLen, cycleMode, periodLen, periodMode, calSync: connected });
+  }, [periods, deletedEventIds, lastSyncedAt, cycleLen, cycleMode, periodLen, periodMode, connected, onSettingsChange]);
+
+  useEffect(() => {
+    if (!native) return;
+    let cancelled = false;
+    isSignedIn()
+      .then(signedIn => { if (!cancelled) setConnected(signedIn); })
+      .catch(() => { if (!cancelled) setConnected(false); });
+    return () => { cancelled = true; };
+  }, [native]);
+
+  const doSync = useCallback(async () => {
+    if (!connected || syncBusy.current || !Capacitor.isNativePlatform()) return;
+    syncBusy.current = true;
+    setSyncStatus('syncing');
+    try {
+      const result = await runSync({
+        periods: periods.map(serializeEntry),
+        deletedEventIds,
+      });
+      setPeriods(sortEntries(result.periods.map(parseStoredEntry).filter(Boolean)));
+      setDeletedEventIds(ids => ids.filter(id => !result.clearedTombstones.includes(id)));
+      setLastSyncedAt(result.syncedAt);
+      setSyncStatus('idle');
+    } catch (error) {
+      setSyncStatus(error instanceof AuthRequired ? 'auth' : 'error');
+      if (error instanceof AuthRequired) setConnected(false);
+    } finally {
+      syncBusy.current = false;
+    }
+  }, [connected, periods, deletedEventIds]);
+
+  useEffect(() => {
+    if (connected) doSync();
+  }, [connected]);
+
+  useEffect(() => {
+    if (!connected) return undefined;
+    const timer = setTimeout(doSync, 5000);
+    return () => clearTimeout(timer);
+  }, [periods, deletedEventIds, connected, doSync]);
+
+  const handleConnect = useCallback(async () => {
+    if (!native) return;
+    setSignInError(false);
+    try {
+      await signIn(SYNC_CONFIG.clientId);
+      setConnected(true);
+      setSyncStatus('idle');
+    } catch {
+      setSignInError(true);
+      setSyncStatus('auth');
+    }
+  }, [native]);
+
+  const handleSignOut = useCallback(async () => {
+    await signOut().catch(() => {});
+    setConnected(false);
+    setSyncStatus('idle');
+  }, []);
 
   // auto-compute cycle len when in auto mode
   useEffect(() => {
@@ -953,19 +1088,18 @@ function CycleApp({
       setBloom({ x: r.left + r.width/2 - sr.left, y: r.top + r.height/2 - sr.top });
     }
     setTimeout(() => setBloom(null), 1200);
-    if (calSync) { setUnsynced(true); setTimeout(() => setUnsynced(false), 2400); }
   };
 
   const handleExport = async () => {
     const json = JSON.stringify(buildBackupState({
       periods,
       deletedEventIds,
-      lastSyncedAt: initialLastSyncedAt,
+      lastSyncedAt,
       cycleLen,
       cycleMode,
       periodLen,
       periodMode,
-      calSync,
+      calSync: connected,
       dark,
       accent,
       font,
@@ -1027,8 +1161,8 @@ function CycleApp({
 
       {/* scroll content */}
       <div style={{ flex: 1, overflow: 'auto', position: 'relative' }}>
-        {/* unsynced indicator */}
-        {unsynced && (
+        {/* sync indicator */}
+        {(syncStatus === 'syncing' || syncStatus === 'error') && (
           <div style={{
             position: 'absolute', top: 8, left: 24, zIndex: 5,
             display: 'flex', alignItems: 'center', gap: 6,
@@ -1036,7 +1170,7 @@ function CycleApp({
             fontFamily: 'var(--font-ui)', fontSize: 12, color: c.textSecondary,
             animation: 'fadeInDown 280ms ease-out',
           }}>
-            <CloudOff c={c.textSecondary} s={13}/> Syncing…
+            <CloudOff c={c.textSecondary} s={13}/> {syncStatus === 'syncing' ? 'Syncing...' : 'Sync failed'}
           </div>
         )}
 
@@ -1122,12 +1256,18 @@ function CycleApp({
       {!native && <NavPill c={c}/>}
 
       <SettingsSheet c={c} open={settingsOpen} onClose={() => setSettingsOpen(false)}
+        native={native}
         cycleLen={cycleLen} setCycleLen={(v) => { setCycleLen(v); setCycleMode('manual'); }}
         cycleMode={cycleMode} setCycleMode={setCycleMode}
         periodLen={periodLen} setPeriodLen={(v) => { setPeriodLen(v); setPeriodMode('manual'); }}
         periodMode={periodMode} setPeriodMode={setPeriodMode}
-        calSync={calSync} setCalSync={setCalSync}
-        calAccount="cycle.user@gmail.com"
+        connected={connected}
+        syncStatus={syncStatus}
+        lastSyncedAt={lastSyncedAt}
+        signInError={signInError}
+        onConnect={handleConnect}
+        onSyncNow={doSync}
+        onSignOut={handleSignOut}
         onExport={handleExport}
         onImportOpen={() => { setSettingsOpen(false); setImportOpen(true); }}
       />
