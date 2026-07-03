@@ -10,6 +10,9 @@ dist/
 period-import.json
 src/sync-config.js
 
+# Local worktrees
+.worktrees/
+
 # OS/editor noise
 .DS_Store
 Thumbs.db
