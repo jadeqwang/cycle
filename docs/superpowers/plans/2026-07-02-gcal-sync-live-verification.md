@@ -174,14 +174,18 @@ git commit -m "Add Google Cloud OAuth setup guide"
 - Consumes: `docs/google-cloud-setup.md` steps 1–7.
 - Produces: a real `clientId` in `src/sync-config.js`, `OAUTH_SCHEME` in `android/gradle.properties`, and an installed APK on Jade's phone. Task 5 cannot start without these.
 
-- [ ] **Step 1:** Jade follows `docs/google-cloud-setup.md` steps 1–7. Agent can run step 1 (keytool) and step 7 (build + `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` with her phone on USB) for her; steps 2–6 are in her browser (suggest `! keytool …` in the session if she wants the SHA-1 inline).
-- [ ] **Step 2: Verify the wiring before touching the phone:** `grep OAUTH_SCHEME android/gradle.properties` shows `com.googleusercontent.apps.<digits>-<hash>`, and `grep clientId src/sync-config.js` shows the same id with the `.apps.googleusercontent.com` suffix. `npx vitest run` still 51/51 (config isn't imported by tests, but cheap insurance).
-- [ ] **Step 3: Commit** (only `android/gradle.properties` — `sync-config.js` stays untracked):
+- [x] **Step 1:** Jade follows `docs/google-cloud-setup.md` steps 1–7. Agent can run step 1 (keytool) and step 7 (build + `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` with her phone on USB) for her; steps 2–6 are in her browser (suggest `! keytool …` in the session if she wants the SHA-1 inline).
+- [x] **Step 2: Verify the wiring before touching the phone:** `grep OAUTH_SCHEME android/gradle.properties` shows `com.googleusercontent.apps.<digits>-<hash>`, and `grep clientId src/sync-config.js` shows the same id with the `.apps.googleusercontent.com` suffix. `npx vitest run` still 51/51 (config isn't imported by tests, but cheap insurance).
+- [x] **Step 3: Commit** (only `android/gradle.properties` — `sync-config.js` stays untracked):
 
 ```bash
 git add android/gradle.properties
 git commit -m "Point OAuth deep link at the real client id"
 ```
+
+> Task 4 started 2026-07-03: Agent ran the debug signing lookup for setup doc step 1. SHA-1 for the local debug keystore is `FD:73:6B:C7:76:6C:48:A3:50:F8:2C:13:7B:7A:7D:DE:30:DD:6D:37`. Current wiring is still pending Jade's Google Cloud browser steps: `android/gradle.properties` has no `OAUTH_SCHEME`, and local gitignored `src/sync-config.js` still contains placeholder `REPLACE_ME.apps.googleusercontent.com`.
+>
+> Task 4 verified 2026-07-03: Jade completed Google Cloud setup steps 1-5 and added the real local client id. Verified `android/gradle.properties:26` has `OAUTH_SCHEME=com.googleusercontent.apps.633413711929-8ee8j3p7kpcvkfjqj671k54fmvs5835k`, and gitignored `src/sync-config.js:4` has matching `633413711929-8ee8j3p7kpcvkfjqj671k54fmvs5835k.apps.googleusercontent.com`. `npx vitest run` passed with 52 tests. Ran `npm run cap:sync`, built `android/app/build/outputs/apk/debug/app-debug.apk` with BUILD SUCCESSFUL, confirmed phone `37191FDHS000E5` was authorized via ADB, and `adb install -r android/app/build/outputs/apk/debug/app-debug.apk` completed with Success.
 
 ### Task 5: Live two-way sync verification — **[Jade + agent, her phone + her calendar]** (Task 9 Step 2)
 
