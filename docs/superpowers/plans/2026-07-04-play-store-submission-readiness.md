@@ -20,6 +20,49 @@
 - `site/privacy.html` exists but still contains production-review caveats.
 - `docs/privacy-policy-outline.md` already identifies important release blockers: disable Android backup, add Delete All Data, confirm final OAuth scopes, confirm crash reporting, and keep Data Safety consistent.
 
+## Status Update: July 4, 2026
+
+Completed computer work:
+
+- [x] Release signing configuration added in `android/app/build.gradle`.
+- [x] Keystore ignore patterns added in `android/.gitignore`.
+- [x] Android backup disabled for sensitive local app data.
+- [x] Delete All Data flow added and tested.
+- [x] Google auth token cleanup hardened so local tokens are removed before remote revoke.
+- [x] Delete All Data now refuses to run while an active sync is in progress.
+- [x] Privacy policy finalized in `landingpage/privacy.html`.
+- [x] Privacy Policy link added in app Settings.
+- [x] Play Console declaration draft created in `docs/play-console-declarations.md`.
+- [x] Release verification checklist created in `docs/release-verification.md`.
+- [x] Closed testing plan created in `docs/closed-testing-plan.md`.
+- [x] Play listing draft created in `docs/play-store-listing.md`.
+- [x] Store asset checklist created in `store-assets/README.md`.
+- [x] Fresh verification after review fixes: `npm test` passed 6 files / 63 tests, and `npm run build` passed.
+
+Remaining computer/agent work:
+
+- [ ] Merge or otherwise integrate the separate Google Calendar OAuth scope-narrowing work.
+- [ ] After Jade provides upload-key values, build a signed release `.aab` and verify it is signed.
+- [ ] Add the release upload certificate SHA-1 to Google Cloud OAuth config, then verify Google Calendar sync from a release/internal-test install.
+- [ ] Capture final Play Store screenshots from the release-like Android app, including Settings, privacy link, Delete All Data confirmation, and optional Calendar sync.
+- [ ] Create or approve a feature graphic if Play Console requires or recommends one for the listing.
+- [ ] Run the full `docs/release-verification.md` checklist against the final signed build.
+- [ ] Deploy the finalized landing/privacy site so `https://cycleapp.org/privacy` serves the committed policy.
+- [ ] Re-check `docs/play-console-declarations.md` after OAuth scope-narrowing lands so Data Safety and OAuth language name the final scopes accurately.
+
+Remaining Jade work:
+
+- [ ] Decide whether this is public production or a smaller known-user release.
+- [ ] Confirm whether the Play developer account triggers the 12 tester / 14 continuous day closed-test requirement.
+- [ ] Create or confirm the Play Console app for package `com.jade.cycle`.
+- [ ] Accept Play App Signing terms.
+- [ ] Generate/provide the Play upload keystore and local signing values without committing them.
+- [ ] Review and approve the privacy policy, listing copy, screenshots, and feature graphic.
+- [ ] Complete Play Console Data Safety and app-content declarations using the draft docs.
+- [ ] Handle OAuth consent screen production setup/verification if Google requires it.
+- [ ] Recruit closed testers if required.
+- [ ] Upload the signed `.aab` to internal testing, then promote only after verification passes.
+
 ## Coordination Rules
 
 - Do not commit secrets, keystores, passwords, `src/sync-config.js`, `period-import.json`, or Play Console credentials.
@@ -481,12 +524,14 @@ These require Jade's accounts, credentials, legal judgment, or external coordina
 ## Final Gate Before Submission
 
 - [ ] Scope-narrowing work has landed or Jade explicitly accepts the current OAuth verification burden.
-- [ ] `android:allowBackup="false"` is verified in the merged manifest.
-- [ ] Delete All Data exists and has been tested.
-- [ ] Privacy policy is public, final, and linked from the app and Play Console.
-- [ ] Data Safety and privacy policy match actual behavior.
+- [x] `android:allowBackup="false"` is verified in the merged manifest.
+- [x] Delete All Data exists and has automated coverage.
+- [x] Privacy policy source is final and linked from the app.
+- [ ] Privacy policy is deployed publicly and linked from Play Console.
+- [ ] Data Safety and privacy policy match final OAuth scope behavior.
 - [ ] Release `.aab` is signed and uploaded to internal testing.
 - [ ] Real-device install from Play internal testing passes.
 - [ ] Google Calendar sync works using the release signing SHA-1 configuration.
-- [ ] Store listing assets and declarations are complete.
+- [ ] Store listing assets are complete and approved.
+- [x] Store listing/declaration draft docs are complete.
 - [ ] Closed testing requirement is satisfied if applicable.
