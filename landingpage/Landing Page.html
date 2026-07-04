@@ -8,11 +8,13 @@
 <meta property="og:title" content="Cycle - minimalist period tracking">
 <meta property="og:description" content="A private, open-source period tracker that does one thing well. No account, no ads, no analytics.">
 <meta property="og:type" content="website">
-<meta property="og:image" content="screenshots/hero-social.png">
+<meta property="og:image" content="https://cycleapp.org/screenshots/hero-social.png">
+<meta property="og:url" content="https://cycleapp.org/">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="icons/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/orbit-32.png">
 <link rel="apple-touch-icon" href="icons/orbit-180.png">
+<link rel="canonical" href="https://cycleapp.org/">
 <style>
   :root {
     --bg: #FAF7F2;
@@ -31,11 +33,11 @@
     --amber-muted: #EFDDC4;
     --hairline: rgba(45,42,38,0.10);
     --display: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
-    --body: "Inter", "Segoe UI", system-ui, sans-serif;
+    --body: "Segoe UI", system-ui, sans-serif;
   }
 
   * { box-sizing: border-box; }
-  html { scroll-behavior: smooth; }
+  html { scroll-behavior: smooth; scroll-padding-top: 88px; }
   body {
     margin: 0;
     font-family: var(--body);
@@ -131,6 +133,7 @@
   }
   .pill .dot { width: 7px; height: 7px; border-radius: 50%; }
   .cta-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; align-items: center; }
+  .cta-note { font-size: 14px; color: var(--ink-muted); margin-top: 14px; }
 
   .phone-stage {
     position: relative;
@@ -275,12 +278,12 @@
   <nav id="nav" aria-label="Primary navigation">
     <div class="wrap nav-in">
       <a class="brand" href="#top">
-        <img src="icons/orbit.svg" alt="Cycle"/>
+        <img src="icons/orbit.svg" alt=""/>
         Cycle
       </a>
       <div class="nav-links">
         <a class="hide-sm" href="#how-it-works">How it works</a>
-        <a class="hide-sm" href="/privacy.html">Privacy policy</a>
+        <a href="/privacy.html">Privacy policy</a>
         <a class="hide-sm" href="mailto:contact@cycleapp.org">Contact</a>
         <a class="btn btn-primary" href="/app/">Open the app</a>
       </div>
@@ -307,6 +310,7 @@
             <a class="btn btn-primary" href="/app/">Open the app</a>
             <a class="btn btn-ghost" href="https://github.com/jadeqwang/cycle" target="_blank" rel="noopener">View source</a>
           </div>
+          <p class="cta-note">Runs in any modern browser, on your phone or computer. Nothing to install.</p>
         </div>
         <div class="phone-stage">
           <img class="hero-shot" src="screenshots/hero-device.png" alt="Cycle app showing the next predicted period and period logging controls">
@@ -392,7 +396,7 @@
         <div class="os">
           <div class="eyebrow">Free and open source</div>
           <h2>Built in the open.</h2>
-          <p>Cycle is free and open source. Found a bug, or wishing it did one more focused thing? The project lives on GitHub, where its privacy claims can be checked against the code.</p>
+          <p>Cycle is free and open source. Found a bug, or wishing it did one more focused thing? Open an issue, read the code, or send a patch — the project lives on GitHub.</p>
           <a class="link-arrow" href="https://github.com/jadeqwang/cycle" target="_blank" rel="noopener" style="margin-top:28px;">
             Browse the code on GitHub
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -405,7 +409,7 @@
   <footer>
     <div class="wrap foot-in">
       <a class="brand" href="#top">
-        <img src="icons/orbit.svg" alt="Cycle" style="width:26px;height:26px;border-radius:8px;"/>
+        <img src="icons/orbit.svg" alt="" style="width:26px;height:26px;border-radius:8px;"/>
         Cycle
       </a>
       <div class="foot-links">
