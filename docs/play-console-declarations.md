@@ -18,7 +18,7 @@ Use these answers as a baseline only. Update them if Cycle adds analytics, crash
 
 - Does the app collect or share user data? Draft answer: Yes, only to the extent that optional, user-directed Google Calendar sync transmits period event data to Google APIs when the user enables sync.
 - Is all user data collected by the app encrypted in transit? Draft answer: Yes. Google Calendar sync uses HTTPS / Google APIs.
-- Does the app provide a way for users to request that data be deleted? Draft answer: Yes, when the in-app local deletion flow is implemented. Until then, mark this as pending and do not submit an answer that overstates the app.
+- Does the app provide a way for users to request that data be deleted? Draft answer: Yes. The in-app Delete all data control clears local period records, sync history, and Google sign-in tokens, and turns Google Calendar sync off. Existing Google Calendar events are not deleted by this local deletion control; users can remove those events in Google Calendar.
 
 ### Data Types
 
@@ -56,7 +56,7 @@ Files and docs:
 ### Security Practices
 
 - Encryption in transit: Yes for data sent to Google APIs during optional Google Calendar sync.
-- Data deletion: Users should be able to delete local Cycle data using the in-app deletion flow when implemented. If local deletion is still pending, state that it is pending internally and complete implementation before final Play submission.
+- Data deletion: Users can delete local Cycle data using the in-app Delete all data control. This clears local period records, sync history, and Google sign-in tokens, and turns Google Calendar sync off.
 - No developer server collection: Cycle does not operate a developer backend that collects cycle history.
 - Local storage: Health data is stored on the user's device unless the user enables Google Calendar sync.
 
@@ -117,13 +117,13 @@ Cycle is a menstrual cycle tracking app for recording period dates and viewing e
 
 Draft answer:
 
-Cycle does not create or manage Cycle accounts, so there is no Cycle account to delete. Users can use the app without creating an account. If a user enables optional Google Calendar sync, they can disconnect sync in the app, revoke Cycle's Google access from their Google Account settings, and delete local Cycle data using the in-app deletion flow when implemented.
+Cycle does not create or manage Cycle accounts, so there is no Cycle account to delete. Users can use the app without creating an account. If a user enables optional Google Calendar sync, they can disconnect sync in the app, revoke Cycle's Google access from their Google Account settings, and delete local Cycle data using the in-app Delete all data control.
 
-## Privacy Policy URL Placeholder
+## Privacy Policy URL
 
 Play Console privacy policy URL:
 
-`TODO: https://cycleapp.org/privacy`
+`https://cycleapp.org/privacy`
 
 Before submission:
 

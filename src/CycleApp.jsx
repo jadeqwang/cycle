@@ -1205,6 +1205,11 @@ function CycleApp({
   }, []);
 
   const handleDeleteAllData = useCallback(async () => {
+    if (syncBusy.current) {
+      window.alert('Cycle is syncing. Wait for sync to finish before deleting all data.');
+      return;
+    }
+
     const confirmed = window.confirm(
       'Delete all Cycle data from this device? This clears local period records, sync history, and Google sign-in tokens. Existing Google Calendar events are not deleted; remove them in Google Calendar if you want them gone.',
     );
