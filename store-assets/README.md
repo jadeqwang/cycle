@@ -4,11 +4,11 @@ This directory tracks Play Store listing assets that still need final capture or
 
 ## App Icon
 
-- [ ] Final app icon source identified.
-- [ ] Final app icon approved for Play Store use.
-- [ ] Confirm whether current Android launcher icons are final.
-- [ ] Record source path or design file:
-- [ ] Record approval owner/date:
+- [x] Final app icon source identified.
+- [x] Final app icon approved for Play Store use.
+- [x] Confirm whether current Android launcher icons are final.
+- [x] Record source path or design file: `cycle-icons/cycle-icon-1024.png` (dark terracotta ring-and-dot; launcher mipmaps regenerated from it)
+- [x] Record approval owner/date: Jade, 2026-07-04 (chose darker icon over earlier washed-out version)
 
 ## Required Phone Screenshots
 
