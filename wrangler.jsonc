@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "cycleapp",
+  "compatibility_date": "2026-07-04",
+  // Assets-only Worker: no server code. Serves the landing page at `/`,
+  // static pages/assets, and the Vite-built React app under `/app/`.
+  "assets": {
+    "directory": "./site"
+  },
+  "routes": [
+    { "pattern": "cycleapp.org", "custom_domain": true },
+    { "pattern": "www.cycleapp.org", "custom_domain": true }
+  ]
+}

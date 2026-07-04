@@ -1,6 +1,8 @@
 node_modules/
 dist/
+site/
 .vite/
+.wrangler/
 
 # Local environment
 .env
