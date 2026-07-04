@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import { Share } from '@capacitor/share';
 import { AuthRequired, isSignedIn, signIn, signOut } from './auth.js';
 import { runSync } from './run-sync.js';
@@ -41,6 +42,7 @@ const DARK = {
 // ─── date helpers ──────────────────────────────────────────────────────────
 const MS_DAY = 86400000;
 const STORAGE_KEY = 'cycle-app.state.v1';
+const PRIVACY_POLICY_URL = 'https://cycleapp.org/privacy';
 const fmtMonth = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmtMonthLong = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 function startOfToday() {
@@ -75,6 +77,18 @@ function syncSubtitle({ native, connected, syncStatus, lastSyncedAt }) {
   const synced = new Date(lastSyncedAt);
   const localDay = new Date(synced.getFullYear(), synced.getMonth(), synced.getDate());
   return `Synced · ${relDays(localDay)}`;
+}
+
+async function openPrivacyPolicy({
+  native = Capacitor.isNativePlatform(),
+  browser = Browser,
+  win = globalThis.window,
+} = {}) {
+  if (native && browser?.open) {
+    await browser.open({ url: PRIVACY_POLICY_URL });
+    return;
+  }
+  win?.open?.(PRIVACY_POLICY_URL, '_blank', 'noopener,noreferrer');
 }
 
 function weekdayMonthDay(d) {
@@ -240,6 +254,22 @@ function buildBackupState(state) {
     dark: !!state.dark,
     accent: state.accent,
     font: state.font,
+  };
+}
+
+function buildDeletedDataState(state = {}) {
+  return {
+    periods: [],
+    deletedEventIds: [],
+    lastSyncedAt: null,
+    cycleLen: 27,
+    cycleMode: 'manual',
+    periodLen: 5,
+    periodMode: 'manual',
+    calSync: false,
+    dark: !!state.dark,
+    accent: state.accent || '#C4928A',
+    font: state.font || 'quicksand',
   };
 }
 
@@ -604,6 +634,8 @@ function SettingsSheet({
   onSignOut,
   onExport,
   onImportOpen,
+  onPrivacyPolicy,
+  onDeleteAllData,
 }) {
   const syncText = syncSubtitle({ native, connected, syncStatus, lastSyncedAt });
   return (
@@ -731,6 +763,32 @@ function SettingsSheet({
               <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>Paste a JSON backup</div>
             </div>
             <ChevronRight c={c.textFaint} s={18}/>
+          </button>
+
+          <button onClick={onPrivacyPolicy} style={{
+            width: '100%', textAlign: 'left',
+            background: 'transparent', border: 'none', padding: '18px 0',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+            borderBottom: `1px solid ${c.hairline}`,
+          }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.textPrimary }}>Privacy Policy</div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>cycleapp.org/privacy</div>
+            </div>
+            <ChevronRight c={c.textFaint} s={18}/>
+          </button>
+
+          <button onClick={onDeleteAllData} style={{
+            width: '100%', textAlign: 'left',
+            background: 'transparent', border: 'none', padding: '18px 0',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+            borderBottom: `1px solid ${c.hairline}`,
+          }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.accentDeep }}>Delete all data</div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>Clear local records and disconnect sync</div>
+            </div>
+            <Trash c={c.accentDeep} s={18}/>
           </button>
 
           <div style={{ padding: '20px 0 8px', textAlign: 'center' }}>
@@ -1033,6 +1091,7 @@ function CycleApp({
   const retryCount = useRef(0);
   const periodsRef = useRef(periods);
   const deletedEventIdsRef = useRef(deletedEventIds);
+  const syncGeneration = useRef(0);
   periodsRef.current = periods;
   deletedEventIdsRef.current = deletedEventIds;
 
@@ -1066,6 +1125,7 @@ function CycleApp({
     syncPending.current = false;
     clearSyncTimers();
     setSyncStatus('syncing');
+    const generation = syncGeneration.current;
     const snapshot = periodsRef.current.map(serializeEntry);
     const snapshotByStart = new Map(snapshot.map(entry => [entry.start, entry]));
     try {
@@ -1073,6 +1133,7 @@ function CycleApp({
         periods: snapshot,
         deletedEventIds: deletedEventIdsRef.current,
       });
+      if (generation !== syncGeneration.current) return;
       const parsedPeriods = result.periods.map(parseStoredEntry).filter(Boolean);
       setPeriods(prev => mergeSyncResult(prev, snapshotByStart, parsedPeriods));
       setDeletedEventIds(ids => filterClearedTombstones(ids, result.clearedTombstones));
@@ -1080,6 +1141,7 @@ function CycleApp({
       retryCount.current = 0;
       setSyncStatus('idle');
     } catch (error) {
+      if (generation !== syncGeneration.current) return;
       if (error instanceof AuthRequired) {
         setSyncStatus('auth');
         setConnected(false);
@@ -1094,7 +1156,7 @@ function CycleApp({
       }
     } finally {
       syncBusy.current = false;
-      if (syncPending.current) {
+      if (generation === syncGeneration.current && syncPending.current) {
         syncPending.current = false;
         doSync();
       }
@@ -1136,10 +1198,45 @@ function CycleApp({
   }, [native]);
 
   const handleSignOut = useCallback(async () => {
+    syncGeneration.current += 1;
     await signOut().catch(() => {});
     setConnected(false);
     setSyncStatus('idle');
   }, []);
+
+  const handleDeleteAllData = useCallback(async () => {
+    if (syncBusy.current) {
+      window.alert('Cycle is syncing. Wait for sync to finish before deleting all data.');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Delete all Cycle data from this device? This clears local period records, sync history, and Google sign-in tokens. Existing Google Calendar events are not deleted; remove them in Google Calendar if you want them gone.',
+    );
+    if (!confirmed) return;
+
+    const next = buildDeletedDataState({ dark, accent, font });
+    syncGeneration.current += 1;
+    clearSyncTimers();
+    syncPending.current = false;
+    retryCount.current = 0;
+    setPeriods(next.periods);
+    setDeletedEventIds(next.deletedEventIds);
+    setLastSyncedAt(next.lastSyncedAt);
+    setCycleLen(next.cycleLen);
+    setCycleMode(next.cycleMode);
+    setPeriodLen(next.periodLen);
+    setPeriodMode(next.periodMode);
+    setConnected(next.calSync);
+    setSyncStatus('idle');
+    setSignInError(false);
+    setLogOffset(0);
+    setBloom(null);
+    setImportOpen(false);
+    setEditIndex(null);
+    setSettingsOpen(false);
+    await signOut().catch(() => {});
+  }, [accent, clearSyncTimers, dark, font]);
 
   // auto-compute cycle len when in auto mode
   useEffect(() => {
@@ -1357,6 +1454,8 @@ function CycleApp({
         onSignOut={handleSignOut}
         onExport={handleExport}
         onImportOpen={() => { setSettingsOpen(false); setImportOpen(true); }}
+        onPrivacyPolicy={() => openPrivacyPolicy()}
+        onDeleteAllData={handleDeleteAllData}
       />
 
       <ImportModal c={c} open={importOpen} onClose={() => setImportOpen(false)}
@@ -1385,6 +1484,7 @@ export {
   LIGHT, DARK, loadStoredState, saveStoredState, makeEntry, hasPeriodOn,
   addPeriodEntry, setPeriodDate, setPeriodEnd, removePeriodAt, collectEventIds,
   autoPeriodLen, parseStoredEntry, serializeEntry,
-  buildBackupState, mergeImportedPeriods, mergeSyncResult, filterClearedTombstones, syncSubtitle,
+  buildBackupState, buildDeletedDataState, mergeImportedPeriods, mergeSyncResult, filterClearedTombstones, syncSubtitle,
+  openPrivacyPolicy, PRIVACY_POLICY_URL,
 };
 export default CycleApp;

@@ -45,29 +45,41 @@
 <main>
   <a class="back" href="/">Back to Cycle</a>
   <h1>Cycle Privacy Policy</h1>
-  <p class="lede">Cycle is a minimalist period tracker. It stores period history locally on your device by default and does not run a developer-operated backend for your cycle history.</p>
+  <p class="lede">Cycle is a minimalist period tracker. Cycle stores period history locally on your device by default and does not run a developer-operated backend for your cycle history.</p>
 
   <div class="panel">
     <p><strong>Last updated:</strong> July 4, 2026</p>
-    <p>This page is a practical privacy summary for the current app. It should be reviewed before production publication if hosting, domains, contact addresses, or Google OAuth configuration change.</p>
+    <p>Questions about this policy can be sent to <a href="mailto:contact@cycleapp.org">contact@cycleapp.org</a>.</p>
   </div>
 
   <h2>What Cycle Stores</h2>
-  <p>Cycle stores period dates, prediction settings, appearance settings, sync metadata, and import/export data locally on your device.</p>
+  <p>Cycle stores period dates, prediction settings, appearance settings, sync metadata, and import/export data locally on your device. If you enable Google Calendar sync, Cycle also stores Google authentication tokens on your device so sync can stay connected.</p>
 
   <h2>Google Calendar Sync</h2>
-  <p>Google Calendar sync is optional. If you enable it, Cycle reads and writes period events in a Google Calendar you control so it can create, update, and remove Cycle events. Those events are stored by Google under your Google account settings.</p>
+  <p>Google Calendar sync is optional. If you enable it, Cycle uses Google OAuth to connect to your Google account and read, create, update, and remove period-related events in a Google Calendar you control. Cycle uses this access only to provide calendar sync.</p>
+  <p>Calendar events synced to Google Calendar are stored by Google in your Google account and may be affected by your Google Calendar sharing settings. Cycle does not send your Google Calendar data to a developer-operated server.</p>
 
-  <h2>What Cycle Does Not Use</h2>
+  <h2>What Cycle Does Not Do</h2>
   <ul>
     <li>No Cycle account.</li>
-    <li>No ads or analytics in the landing page or app.</li>
-    <li>No developer-run server storing your period history.</li>
-    <li>No sale of period history or app usage data.</li>
+    <li>No developer-operated backend for your cycle history.</li>
+    <li>No advertising SDK.</li>
+    <li>No in-app analytics SDK.</li>
+    <li>No sale of personal or sensitive data.</li>
   </ul>
 
   <h2>Export And Import</h2>
-  <p>Cycle can export a local backup file and import one back into the app. You control where that file is stored and shared.</p>
+  <p>Cycle can export a local backup file and import one back into the app. Exported files may contain sensitive health information. You choose where exported files are saved or shared, and any app or service you choose to share with receives that data from you.</p>
+
+  <h2>Deletion And Retention</h2>
+  <p>The in-app Delete all data control clears local period records, deleted-event sync tracking, sync metadata, and Google sign-in tokens, turns Google Calendar sync off, and signs you out of Google in Cycle. It preserves visual preferences such as appearance, accent color, and font.</p>
+  <p>Delete all data does not delete existing Google Calendar events. If you want synced events removed from Google Calendar, delete them in Google Calendar.</p>
+
+  <h2>Security</h2>
+  <p>Cycle relies on your device and operating system security to protect local app data. Google Calendar sync uses Google OAuth and HTTPS connections to Google APIs. You should protect your device with a lock screen and protect your Google account credentials.</p>
+
+  <h2>Third Parties</h2>
+  <p>Google may process data when you install or update Cycle through Google Play, use Google Play services, or enable Google Calendar sync. Google's handling of that data is governed by Google's policies and your Google account settings.</p>
 
   <h2>Contact</h2>
   <p>Questions about this policy can be sent to <a href="mailto:contact@cycleapp.org">contact@cycleapp.org</a>.</p>

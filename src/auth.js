@@ -38,12 +38,12 @@ export async function isSignedIn() {
 
 export async function signOut() {
   const tokens = await loadTokens();
+  await Preferences.remove({ key: TOKEN_KEY });
   if (tokens?.refresh_token) {
     await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(tokens.refresh_token)}`, {
       method: 'POST',
     }).catch(() => {});
   }
-  await Preferences.remove({ key: TOKEN_KEY });
 }
 
 export async function signIn(clientId) {
