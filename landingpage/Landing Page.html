@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>Cycle - minimalist period tracking</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<meta name="description" content="Cycle is a minimalist, open-source period tracker. Log period dates, see simple predictions, and optionally sync to your own Google Calendar without accounts, ads, or analytics.">
+<meta property="og:title" content="Cycle - minimalist period tracking">
+<meta property="og:description" content="A private, open-source period tracker that does one thing well. No account, no ads, no analytics.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="screenshots/hero-social.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="icons/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/orbit-32.png">
+<link rel="apple-touch-icon" href="icons/orbit-180.png">
+<style>
+  :root {
+    --bg: #FAF7F2;
+    --surface: #F0EBE3;
+    --surface-deep: #E7E0D5;
+    --ink: #2D2A26;
+    --ink-2: #625C55;
+    --ink-muted: #80776E;
+    --rose: #C4928A;
+    --rose-deep: #A87770;
+    --rose-muted: #E8D5D0;
+    --sage: #A3B5A6;
+    --sage-deep: #6F866F;
+    --sage-muted: #D8E2DA;
+    --amber: #D4A574;
+    --amber-muted: #EFDDC4;
+    --hairline: rgba(45,42,38,0.10);
+    --display: ui-rounded, "SF Pro Rounded", "Segoe UI", system-ui, sans-serif;
+    --body: "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--body);
+    color: var(--ink);
+    background:
+      radial-gradient(ellipse 60% 45% at 78% 8%, rgba(196,146,138,0.18), transparent 60%),
+      radial-gradient(ellipse 48% 44% at 8% 62%, rgba(163,181,166,0.18), transparent 62%),
+      linear-gradient(180deg, #FFFCF7 0%, var(--bg) 38%, #F7F1EA 100%);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.55;
+    overflow-x: hidden;
+  }
+  h1, h2, h3 { font-family: var(--display); font-weight: 650; letter-spacing: 0; margin: 0; line-height: 1.08; }
+  p { margin: 0; }
+  a { color: inherit; text-decoration: none; }
+
+  .wrap { max-width: 1140px; margin: 0 auto; padding: 0 32px; }
+  .eyebrow {
+    font-family: var(--display);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--rose-deep);
+  }
+
+  a:focus-visible,
+  button:focus-visible,
+  .btn:focus-visible {
+    outline: 3px solid rgba(126,147,130,0.55);
+    outline-offset: 4px;
+  }
+
+  nav {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: saturate(1.2) blur(14px);
+    background: rgba(250,247,242,0.78);
+    border-bottom: 1px solid transparent;
+    transition: border-color 240ms ease, background 240ms ease;
+  }
+  nav.scrolled { border-bottom-color: var(--hairline); }
+  .nav-in { display: flex; align-items: center; justify-content: space-between; min-height: 72px; gap: 24px; }
+  .brand { display: inline-flex; align-items: center; gap: 11px; font-family: var(--display); font-weight: 700; font-size: 19px; }
+  .brand img { width: 30px; height: 30px; border-radius: 9px; display: block; }
+  .nav-links { display: flex; align-items: center; gap: 28px; }
+  .nav-links a:not(.btn) { font-size: 15px; color: var(--ink-2); transition: color 160ms ease; }
+  .nav-links a:hover { color: var(--ink); }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 44px;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 15px;
+    padding: 11px 20px;
+    border-radius: 999px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: transform 160ms ease, background 160ms ease, box-shadow 160ms ease;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--rose); color: #FFFEFB; box-shadow: 0 10px 24px -12px rgba(168,119,112,0.9); }
+  .btn-primary:hover { background: var(--rose-deep); transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--ink); border-color: var(--hairline); }
+  .btn-ghost:hover { background: var(--surface); transform: translateY(-1px); }
+
+  .hero {
+    display: grid;
+    grid-template-columns: 1.02fr 0.98fr;
+    gap: 42px;
+    align-items: center;
+    padding: 58px 0 66px;
+  }
+  .hero h1 { font-size: clamp(42px, 5.4vw, 68px); max-width: 8em; }
+  .hero .lede { font-size: clamp(17px, 1.5vw, 19px); color: var(--ink-2); max-width: 34em; margin-top: 24px; }
+  .pills { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 26px; }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--display);
+    font-weight: 650;
+    font-size: 14px;
+    background: rgba(240,235,227,0.86);
+    color: var(--ink-2);
+    padding: 8px 15px;
+    border-radius: 999px;
+    border: 1px solid var(--hairline);
+  }
+  .pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; align-items: center; }
+  .cta-note { font-size: 14px; color: var(--ink-2); }
+
+  .phone-stage {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 520px;
+    overflow: visible;
+  }
+  .phone-glow {
+    position: absolute;
+    width: min(390px, 84vw);
+    height: min(390px, 84vw);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(196,146,138,0.28), rgba(163,181,166,0.18) 45%, transparent 70%);
+    filter: blur(8px);
+    z-index: 0;
+  }
+  .hero-shot {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: min(390px, 82vw);
+    aspect-ratio: 780 / 1120;
+    object-fit: contain;
+    border-radius: 32px;
+    box-shadow: 0 26px 74px -34px rgba(45,42,38,0.58);
+  }
+
+  section { position: relative; }
+  .band { padding: 84px 0; }
+  .compact-band { padding: 56px 0; }
+  .sec-head { max-width: 42rem; }
+  .sec-head h2 { font-size: clamp(30px, 3.4vw, 42px); margin-top: 14px; }
+  .sec-head p { color: var(--ink-2); font-size: 18px; margin-top: 16px; }
+
+  .steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 18px;
+    margin-top: 34px;
+  }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 18px;
+    padding: 20px;
+    color: var(--ink-2);
+  }
+  .step strong {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    background: var(--rose-muted);
+    color: var(--rose-deep);
+    font-family: var(--display);
+  }
+
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 52px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 20px;
+    padding: 32px 28px;
+  }
+  .card .ic {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--sage-muted);
+    color: var(--sage-deep);
+    margin-bottom: 22px;
+  }
+  .card:nth-child(2) .ic { background: var(--amber-muted); color: #936B3D; }
+  .card:nth-child(3) .ic { background: var(--rose-muted); color: var(--rose-deep); }
+  .card h3 { font-size: 22px; }
+  .card p { color: var(--ink-2); font-size: 15.5px; margin-top: 10px; }
+
+  .not-band { background: var(--ink); color: #EDE7DD; border-radius: 30px; margin: 0 32px; overflow: hidden; position: relative; }
+  .not-inner { padding: 70px 8px; display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 48px; align-items: center; }
+  .not-band .eyebrow { color: var(--amber); }
+  .not-band h2 { font-size: clamp(30px, 3.4vw, 44px); color: #F6F1E9; margin-top: 14px; }
+  .not-band .sub { color: rgba(237,231,221,0.76); font-size: 17px; margin-top: 18px; max-width: 29em; }
+  .not-list { display: flex; flex-wrap: wrap; gap: 14px 26px; }
+  .not-item {
+    font-family: var(--display);
+    font-weight: 750;
+    font-size: clamp(25px, 3.1vw, 39px);
+    color: rgba(237,231,221,0.38);
+    position: relative;
+    line-height: 1.1;
+  }
+  .not-item::after {
+    content: '';
+    position: absolute;
+    left: -4px;
+    right: -4px;
+    top: 52%;
+    height: 3px;
+    background: var(--rose);
+    border-radius: 2px;
+    transform: rotate(-4deg);
+  }
+
+  .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; margin-top: 52px; }
+  .feat {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 20px;
+    padding: 30px;
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+  }
+  .feat .ic {
+    flex-shrink: 0;
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    border: 1px solid var(--hairline);
+    color: var(--rose-deep);
+  }
+  .feat:nth-child(2) .ic { color: var(--sage-deep); }
+  .feat:nth-child(3) .ic { color: #936B3D; }
+  .feat h3 { font-size: 19px; }
+  .feat p { color: var(--ink-2); font-size: 15px; margin-top: 8px; }
+
+  .os {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: 24px;
+    padding: 56px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .os h2 { font-size: clamp(28px, 3.2vw, 40px); }
+  .os p { color: var(--ink-2); font-size: 18px; margin-top: 16px; max-width: 36em; }
+  .code {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 13.5px;
+    background: var(--bg);
+    border: 1px solid var(--hairline);
+    color: var(--ink-2);
+    padding: 12px 18px;
+    border-radius: 12px;
+    margin-top: 28px;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .code .k { color: var(--rose-deep); }
+
+  footer { padding: 56px 0 48px; border-top: 1px solid var(--hairline); margin-top: 40px; }
+  .foot-in { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
+  .foot-links { display: flex; gap: 24px; flex-wrap: wrap; }
+  .foot-links a { font-size: 15px; color: var(--ink-2); }
+  .foot-links a:hover { color: var(--ink); }
+  .foot-meta { font-size: 14px; color: var(--ink-muted); }
+  .link-arrow { display: inline-flex; align-items: center; gap: 6px; color: var(--rose-deep); font-weight: 650; font-family: var(--display); }
+  .link-arrow svg { transition: transform 160ms ease; }
+  .link-arrow:hover svg { transform: translate(2px,-2px); }
+
+  @media (max-width: 980px) {
+    .hero { grid-template-columns: 1fr; gap: 22px; padding: 46px 0 50px; text-align: center; }
+    .hero h1, .hero .lede { margin-left: auto; margin-right: auto; }
+    .pills, .cta-row { justify-content: center; }
+    .phone-stage { min-height: auto; margin-top: 10px; }
+    .hero-shot { width: min(320px, 70vw); }
+  }
+  @media (max-width: 860px) {
+    .nav-links .hide-sm { display: none; }
+    .pillars { grid-template-columns: 1fr; }
+    .not-inner { grid-template-columns: 1fr; gap: 30px; padding: 56px 8px; }
+    .not-band { margin: 0 20px; }
+  }
+  @media (max-width: 720px) {
+    .wrap { padding: 0 22px; }
+    .steps, .feat-grid { grid-template-columns: 1fr; }
+    .feat { padding: 24px; }
+    .os { padding: 38px 22px; }
+  }
+  @media (max-width: 480px) {
+    .nav-in { min-height: 66px; }
+    .brand { font-size: 18px; }
+    .nav-links { gap: 12px; }
+    .btn { font-size: 14px; padding: 10px 16px; }
+    .hero { padding-top: 36px; }
+    .hero h1 { font-size: 42px; }
+    .hero .lede { font-size: 18px; }
+    .cta-row { align-items: stretch; }
+    .cta-row .btn { width: 100%; }
+    .not-band { margin: 0 12px; border-radius: 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *,
+    *::before,
+    *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+</style>
+</head>
+<body>
+  <nav id="nav" aria-label="Primary navigation">
+    <div class="wrap nav-in">
+      <a class="brand" href="#top">
+        <img src="icons/orbit.svg" alt="Cycle"/>
+        Cycle
+      </a>
+      <div class="nav-links">
+        <a class="hide-sm" href="#how-it-works">How it works</a>
+        <a class="hide-sm" href="#privacy">Privacy</a>
+        <a class="hide-sm" href="/privacy.html">Privacy policy</a>
+        <a class="hide-sm" href="mailto:contact@cycleapp.org">Contact</a>
+        <a class="btn btn-primary" href="/Cycle.html">Open the app</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <header id="top" class="wrap">
+      <div class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow">Minimalist period tracking</div>
+          <h1>Your cycle,<br/>kept close.</h1>
+          <p class="lede">
+            Cycle does one thing: track period dates simply and privately. Your history stays
+            on your device unless you choose to sync period events to your own Google Calendar.
+            No account, no ads, no analytics, no twenty-tab health dashboard.
+          </p>
+          <div class="pills">
+            <span class="pill"><span class="dot" style="background:var(--sage)"></span>One-purpose tracker</span>
+            <span class="pill"><span class="dot" style="background:var(--rose)"></span>On-device by default</span>
+            <span class="pill"><span class="dot" style="background:var(--amber)"></span>Open source</span>
+          </div>
+          <div class="cta-row">
+            <a class="btn btn-primary" href="/Cycle.html">Open the app</a>
+            <a class="btn btn-ghost" href="https://github.com/jadeqwang/cycle" target="_blank" rel="noopener">View source</a>
+            <span class="cta-note">Nothing to sign up for.</span>
+          </div>
+        </div>
+        <div class="phone-stage">
+          <div class="phone-glow"></div>
+          <img class="hero-shot" src="screenshots/hero-device.png" alt="Cycle app showing the next predicted period and period logging controls">
+        </div>
+      </div>
+    </header>
+
+    <section id="how-it-works" class="band compact-band">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="eyebrow">Minimal by design</div>
+          <h2>Log the date. See what comes next.</h2>
+          <p>Cycle avoids the extra dashboard. It keeps the core loop small: record your period, see a simple prediction, and keep a backup when you need one.</p>
+        </div>
+        <div class="steps">
+          <div class="step"><strong>1</strong><span>Log a period start or end.</span></div>
+          <div class="step"><strong>2</strong><span>Cycle estimates the next date.</span></div>
+          <div class="step"><strong>3</strong><span>Optionally sync dates to Google Calendar.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="privacy" class="band">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="eyebrow">Privacy, by design</div>
+          <h2>Private by default, explicit when synced.</h2>
+          <p>Period history is stored locally on your device. Cycle does not run a backend server that stores your cycle history.</p>
+        </div>
+        <div class="pillars">
+          <div class="card">
+            <div class="ic" aria-hidden="true" focusable="false">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="6" y="3.5" width="12" height="17" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 17.5h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <h3>On your device</h3>
+            <p>Period history is stored locally on your device. Cycle does not run a backend server that stores your cycle history.</p>
+          </div>
+          <div class="card">
+            <div class="ic" aria-hidden="true" focusable="false">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="3.5" y="5.5" width="17" height="15" rx="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 3v4M16 3v4M3.5 10h17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <h3>Your calendar, your rules</h3>
+            <p>Calendar sync is optional. When enabled, Cycle keeps period events in a Google Calendar you control and does not send them to a developer-run server.</p>
+          </div>
+          <div class="card">
+            <div class="ic" aria-hidden="true" focusable="false">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M9 8l-5 4 5 4M15 8l5 4-5 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Auditable by design</h3>
+            <p>Cycle is open source, so its privacy promises can be checked against the code instead of taken on faith.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="band compact-band">
+      <div class="not-band">
+        <div class="wrap not-inner">
+          <div>
+            <div class="eyebrow">What you will not find</div>
+            <h2>The list of things<br/>Cycle leaves out.</h2>
+            <p class="sub">Cycle is intentionally small. It leaves out anything that would turn a simple period log into an account, feed, ad product, or data profile.</p>
+          </div>
+          <div class="not-list">
+            <span class="not-item">ads</span>
+            <span class="not-item">analytics</span>
+            <span class="not-item">accounts</span>
+            <span class="not-item">paywalls</span>
+            <span class="not-item">content feeds</span>
+            <span class="not-item">data brokers</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="features" class="band">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="eyebrow">Quietly capable</div>
+          <h2>Everything you need. Nothing you do not.</h2>
+          <p>A small interface for the core tracking workflow, with optional sync and backup tools when you need them.</p>
+        </div>
+        <div class="feat-grid">
+          <div class="feat">
+            <div class="ic" aria-hidden="true" focusable="false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4l2.5 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div>
+              <h3>Simple period logging</h3>
+              <p>Record starts and ends without symptoms, forms, content prompts, or extra health categories.</p>
+            </div>
+          </div>
+          <div class="feat">
+            <div class="ic" aria-hidden="true" focusable="false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M4 15c3-6 5-8 8-8s5 2 8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="7" r="1.4" fill="currentColor"/></svg></div>
+            <div>
+              <h3>Plain predictions</h3>
+              <p>Cycle estimates the next expected period from your log and keeps the result easy to scan.</p>
+            </div>
+          </div>
+          <div class="feat">
+            <div class="ic" aria-hidden="true" focusable="false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="3.5" y="5.5" width="17" height="15" rx="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 3v4M16 3v4M3.5 10h17M15 15l-3 3-1.5-1.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div>
+              <h3>Optional calendar sync</h3>
+              <p>Put logged and predicted dates in a Google Calendar you control, with no developer-run server in the middle.</p>
+            </div>
+          </div>
+          <div class="feat">
+            <div class="ic" aria-hidden="true" focusable="false"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M7 8h10M7 12h10M9 16h6M5 4.5h14v15H5z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+            <div>
+              <h3>Export and import</h3>
+              <p>Keep a local backup of your period history and restore it when you move devices.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="open-source" class="band compact-band">
+      <div class="wrap">
+        <div class="os">
+          <div class="eyebrow">Free and open source</div>
+          <h2>Built in the open.</h2>
+          <p>Cycle is free and open source. Found a bug, or wishing it did one more focused thing? The project lives on GitHub, where its privacy claims can be checked against the code.</p>
+          <div class="cta-row" style="justify-content:center;">
+            <a class="btn btn-primary" href="https://github.com/jadeqwang/cycle/issues" target="_blank" rel="noopener">
+              Report a bug or request a feature
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M7 17L17 7M9 7h8v8" stroke="#FFFEFB" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+            <a class="btn btn-ghost" href="https://github.com/jadeqwang/cycle" target="_blank" rel="noopener">Browse the code</a>
+          </div>
+          <div class="code"><span class="k">$</span> git clone https://github.com/jadeqwang/cycle.git</div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot-in">
+      <a class="brand" href="#top">
+        <img src="icons/orbit.svg" alt="Cycle" style="width:26px;height:26px;border-radius:8px;"/>
+        Cycle
+      </a>
+      <div class="foot-links">
+        <a href="/privacy.html">Privacy policy</a>
+        <a href="mailto:contact@cycleapp.org">Contact</a>
+        <a href="/Cycle.html">Open the app</a>
+        <a class="link-arrow" href="https://github.com/jadeqwang/cycle/issues" target="_blank" rel="noopener">
+          GitHub issues
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+      </div>
+      <div class="foot-meta">cycleapp.org · No ads, no analytics, no account.</div>
+    </div>
+  </footer>
+
+  <script>
+    const navEl = document.getElementById('nav');
+    const onScroll = () => navEl.classList.toggle('scrolled', window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+  </script>
+</body>
+</html>
