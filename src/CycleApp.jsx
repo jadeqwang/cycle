@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { Browser } from '@capacitor/browser';
 import { Share } from '@capacitor/share';
 import { AuthRequired, isSignedIn, signIn, signOut } from './auth.js';
 import { runSync } from './run-sync.js';
@@ -41,6 +42,7 @@ const DARK = {
 // ─── date helpers ──────────────────────────────────────────────────────────
 const MS_DAY = 86400000;
 const STORAGE_KEY = 'cycle-app.state.v1';
+const PRIVACY_POLICY_URL = 'https://cycleapp.org/privacy';
 const fmtMonth = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const fmtMonthLong = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 function startOfToday() {
@@ -75,6 +77,18 @@ function syncSubtitle({ native, connected, syncStatus, lastSyncedAt }) {
   const synced = new Date(lastSyncedAt);
   const localDay = new Date(synced.getFullYear(), synced.getMonth(), synced.getDate());
   return `Synced · ${relDays(localDay)}`;
+}
+
+async function openPrivacyPolicy({
+  native = Capacitor.isNativePlatform(),
+  browser = Browser,
+  win = globalThis.window,
+} = {}) {
+  if (native && browser?.open) {
+    await browser.open({ url: PRIVACY_POLICY_URL });
+    return;
+  }
+  win?.open?.(PRIVACY_POLICY_URL, '_blank', 'noopener,noreferrer');
 }
 
 function weekdayMonthDay(d) {
@@ -620,6 +634,7 @@ function SettingsSheet({
   onSignOut,
   onExport,
   onImportOpen,
+  onPrivacyPolicy,
   onDeleteAllData,
 }) {
   const syncText = syncSubtitle({ native, connected, syncStatus, lastSyncedAt });
@@ -746,6 +761,19 @@ function SettingsSheet({
             <div>
               <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.textPrimary }}>Import data</div>
               <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>Paste a JSON backup</div>
+            </div>
+            <ChevronRight c={c.textFaint} s={18}/>
+          </button>
+
+          <button onClick={onPrivacyPolicy} style={{
+            width: '100%', textAlign: 'left',
+            background: 'transparent', border: 'none', padding: '18px 0',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+            borderBottom: `1px solid ${c.hairline}`,
+          }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.textPrimary }}>Privacy Policy</div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>cycleapp.org/privacy</div>
             </div>
             <ChevronRight c={c.textFaint} s={18}/>
           </button>
@@ -1421,6 +1449,7 @@ function CycleApp({
         onSignOut={handleSignOut}
         onExport={handleExport}
         onImportOpen={() => { setSettingsOpen(false); setImportOpen(true); }}
+        onPrivacyPolicy={() => openPrivacyPolicy()}
         onDeleteAllData={handleDeleteAllData}
       />
 
@@ -1451,5 +1480,6 @@ export {
   addPeriodEntry, setPeriodDate, setPeriodEnd, removePeriodAt, collectEventIds,
   autoPeriodLen, parseStoredEntry, serializeEntry,
   buildBackupState, buildDeletedDataState, mergeImportedPeriods, mergeSyncResult, filterClearedTombstones, syncSubtitle,
+  openPrivacyPolicy, PRIVACY_POLICY_URL,
 };
 export default CycleApp;

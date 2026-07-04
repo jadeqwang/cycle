@@ -4,7 +4,7 @@ import {
   makeEntry, collectEventIds, autoPeriodLen, parseStoredEntry,
   serializeEntry, buildBackupState, loadStoredState, saveStoredState, mergeImportedPeriods,
   mergeSyncResult, filterClearedTombstones, syncSubtitle,
-  buildDeletedDataState,
+  buildDeletedDataState, openPrivacyPolicy, PRIVACY_POLICY_URL,
 } from './CycleApp.jsx';
 
 const d = (y, m, day) => new Date(y, m - 1, day);
@@ -61,6 +61,28 @@ describe('syncSubtitle', () => {
       syncStatus: 'idle',
       lastSyncedAt: '2026-07-02T11:00:00.000Z',
     })).toBe('Synced · today');
+  });
+});
+
+describe('openPrivacyPolicy', () => {
+  test('opens the hosted privacy policy in the Capacitor Browser on native platforms', async () => {
+    const browser = { open: vi.fn().mockResolvedValue(undefined) };
+    const win = { open: vi.fn() };
+
+    await openPrivacyPolicy({ native: true, browser, win });
+
+    expect(browser.open).toHaveBeenCalledWith({ url: PRIVACY_POLICY_URL });
+    expect(win.open).not.toHaveBeenCalled();
+  });
+
+  test('opens the hosted privacy policy in a new browser tab on web', async () => {
+    const browser = { open: vi.fn().mockResolvedValue(undefined) };
+    const win = { open: vi.fn() };
+
+    await openPrivacyPolicy({ native: false, browser, win });
+
+    expect(browser.open).not.toHaveBeenCalled();
+    expect(win.open).toHaveBeenCalledWith(PRIVACY_POLICY_URL, '_blank', 'noopener,noreferrer');
   });
 });
 
