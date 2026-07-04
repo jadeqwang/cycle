@@ -37,11 +37,19 @@ describe('landing page refresh', () => {
       'https://unpkg.com',
       'text/babel',
       'react.development.js',
+      'not-band',
+      'data brokers',
+      'Nothing to sign up for',
+      'phone-glow',
     ];
 
     for (const phrase of bannedPhrases) {
       expect(html).not.toContain(phrase);
     }
+  });
+
+  test('deduplicates the on-device privacy sentence', () => {
+    expect(html.split('Cycle does not run a backend server').length - 1).toBe(1);
   });
 
   test('has production metadata, trust links, and accessible landmarks', () => {
@@ -53,7 +61,6 @@ describe('landing page refresh', () => {
     expect(html).toContain('<main>');
     expect(html).toContain('href="/privacy.html"');
     expect(html).toContain('href="mailto:contact@cycleapp.org"');
-    expect(html).toContain('git clone https://github.com/jadeqwang/cycle.git');
   });
 
   test('uses static hero image and reduced-motion/focus styles', () => {
@@ -62,7 +69,6 @@ describe('landing page refresh', () => {
     expect(html).toContain('a:focus-visible');
     expect(html).toContain('prefers-reduced-motion: reduce');
     expect(html).toContain('.compact-band');
-    expect(html).toContain('.steps');
   });
 
   test('ships the linked privacy page and image assets', () => {

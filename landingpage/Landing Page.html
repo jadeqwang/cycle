@@ -131,33 +131,23 @@
   }
   .pill .dot { width: 7px; height: 7px; border-radius: 50%; }
   .cta-row { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 34px; align-items: center; }
-  .cta-note { font-size: 14px; color: var(--ink-2); }
 
   .phone-stage {
     position: relative;
     display: flex;
     justify-content: center;
     align-items: center;
-    min-height: 520px;
     overflow: visible;
-  }
-  .phone-glow {
-    position: absolute;
-    width: min(390px, 84vw);
-    height: min(390px, 84vw);
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(196,146,138,0.28), rgba(163,181,166,0.18) 45%, transparent 70%);
-    filter: blur(8px);
-    z-index: 0;
   }
   .hero-shot {
     position: relative;
     z-index: 1;
     display: block;
-    width: min(390px, 82vw);
-    aspect-ratio: 780 / 1120;
+    width: min(300px, 78vw);
+    aspect-ratio: 390 / 844;
     object-fit: contain;
-    border-radius: 32px;
+    border-radius: 28px;
+    border: 1px solid var(--hairline);
     box-shadow: 0 26px 74px -34px rgba(45,42,38,0.58);
   }
 
@@ -167,35 +157,6 @@
   .sec-head { max-width: 42rem; }
   .sec-head h2 { font-size: clamp(30px, 3.4vw, 42px); margin-top: 14px; }
   .sec-head p { color: var(--ink-2); font-size: 18px; margin-top: 16px; }
-
-  .steps {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 18px;
-    margin-top: 34px;
-  }
-  .step {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    border-radius: 18px;
-    padding: 20px;
-    color: var(--ink-2);
-  }
-  .step strong {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    width: 32px;
-    height: 32px;
-    border-radius: 999px;
-    background: var(--rose-muted);
-    color: var(--rose-deep);
-    font-family: var(--display);
-  }
 
   .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px; margin-top: 52px; }
   .card {
@@ -219,32 +180,6 @@
   .card:nth-child(3) .ic { background: var(--rose-muted); color: var(--rose-deep); }
   .card h3 { font-size: 22px; }
   .card p { color: var(--ink-2); font-size: 15.5px; margin-top: 10px; }
-
-  .not-band { background: var(--ink); color: #EDE7DD; border-radius: 30px; margin: 0 32px; overflow: hidden; position: relative; }
-  .not-inner { padding: 70px 8px; display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 48px; align-items: center; }
-  .not-band .eyebrow { color: var(--amber); }
-  .not-band h2 { font-size: clamp(30px, 3.4vw, 44px); color: #F6F1E9; margin-top: 14px; }
-  .not-band .sub { color: rgba(237,231,221,0.76); font-size: 17px; margin-top: 18px; max-width: 29em; }
-  .not-list { display: flex; flex-wrap: wrap; gap: 14px 26px; }
-  .not-item {
-    font-family: var(--display);
-    font-weight: 750;
-    font-size: clamp(25px, 3.1vw, 39px);
-    color: rgba(237,231,221,0.38);
-    position: relative;
-    line-height: 1.1;
-  }
-  .not-item::after {
-    content: '';
-    position: absolute;
-    left: -4px;
-    right: -4px;
-    top: 52%;
-    height: 3px;
-    background: var(--rose);
-    border-radius: 2px;
-    transform: rotate(-4deg);
-  }
 
   .feat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; margin-top: 52px; }
   .feat {
@@ -285,19 +220,6 @@
   }
   .os h2 { font-size: clamp(28px, 3.2vw, 40px); }
   .os p { color: var(--ink-2); font-size: 18px; margin-top: 16px; max-width: 36em; }
-  .code {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    font-size: 13.5px;
-    background: var(--bg);
-    border: 1px solid var(--hairline);
-    color: var(--ink-2);
-    padding: 12px 18px;
-    border-radius: 12px;
-    margin-top: 28px;
-    max-width: 100%;
-    overflow-wrap: anywhere;
-  }
-  .code .k { color: var(--rose-deep); }
 
   footer { padding: 56px 0 48px; border-top: 1px solid var(--hairline); margin-top: 40px; }
   .foot-in { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
@@ -314,17 +236,15 @@
     .hero h1, .hero .lede { margin-left: auto; margin-right: auto; }
     .pills, .cta-row { justify-content: center; }
     .phone-stage { min-height: auto; margin-top: 10px; }
-    .hero-shot { width: min(320px, 70vw); }
+    .hero-shot { width: min(280px, 65vw); }
   }
   @media (max-width: 860px) {
     .nav-links .hide-sm { display: none; }
     .pillars { grid-template-columns: 1fr; }
-    .not-inner { grid-template-columns: 1fr; gap: 30px; padding: 56px 8px; }
-    .not-band { margin: 0 20px; }
   }
   @media (max-width: 720px) {
     .wrap { padding: 0 22px; }
-    .steps, .feat-grid { grid-template-columns: 1fr; }
+    .feat-grid { grid-template-columns: 1fr; }
     .feat { padding: 24px; }
     .os { padding: 38px 22px; }
   }
@@ -338,7 +258,6 @@
     .hero .lede { font-size: 18px; }
     .cta-row { align-items: stretch; }
     .cta-row .btn { width: 100%; }
-    .not-band { margin: 0 12px; border-radius: 24px; }
   }
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
@@ -361,7 +280,6 @@
       </a>
       <div class="nav-links">
         <a class="hide-sm" href="#how-it-works">How it works</a>
-        <a class="hide-sm" href="#privacy">Privacy</a>
         <a class="hide-sm" href="/privacy.html">Privacy policy</a>
         <a class="hide-sm" href="mailto:contact@cycleapp.org">Contact</a>
         <a class="btn btn-primary" href="/Cycle.html">Open the app</a>
@@ -388,11 +306,9 @@
           <div class="cta-row">
             <a class="btn btn-primary" href="/Cycle.html">Open the app</a>
             <a class="btn btn-ghost" href="https://github.com/jadeqwang/cycle" target="_blank" rel="noopener">View source</a>
-            <span class="cta-note">Nothing to sign up for.</span>
           </div>
         </div>
         <div class="phone-stage">
-          <div class="phone-glow"></div>
           <img class="hero-shot" src="screenshots/hero-device.png" alt="Cycle app showing the next predicted period and period logging controls">
         </div>
       </div>
@@ -404,74 +320,6 @@
           <div class="eyebrow">Minimal by design</div>
           <h2>Log the date. See what comes next.</h2>
           <p>Cycle avoids the extra dashboard. It keeps the core loop small: record your period, see a simple prediction, and keep a backup when you need one.</p>
-        </div>
-        <div class="steps">
-          <div class="step"><strong>1</strong><span>Log a period start or end.</span></div>
-          <div class="step"><strong>2</strong><span>Cycle estimates the next date.</span></div>
-          <div class="step"><strong>3</strong><span>Optionally sync dates to Google Calendar.</span></div>
-        </div>
-      </div>
-    </section>
-
-    <section id="privacy" class="band">
-      <div class="wrap">
-        <div class="sec-head">
-          <div class="eyebrow">Privacy, by design</div>
-          <h2>Private by default, explicit when synced.</h2>
-          <p>Period history is stored locally on your device. Cycle does not run a backend server that stores your cycle history.</p>
-        </div>
-        <div class="pillars">
-          <div class="card">
-            <div class="ic" aria-hidden="true" focusable="false">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="6" y="3.5" width="12" height="17" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 17.5h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </div>
-            <h3>On your device</h3>
-            <p>Period history is stored locally on your device. Cycle does not run a backend server that stores your cycle history.</p>
-          </div>
-          <div class="card">
-            <div class="ic" aria-hidden="true" focusable="false">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="3.5" y="5.5" width="17" height="15" rx="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 3v4M16 3v4M3.5 10h17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-            </div>
-            <h3>Your calendar, your rules</h3>
-            <p>Calendar sync is optional. When enabled, Cycle keeps period events in a Google Calendar you control and does not send them to a developer-run server.</p>
-          </div>
-          <div class="card">
-            <div class="ic" aria-hidden="true" focusable="false">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M9 8l-5 4 5 4M15 8l5 4-5 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </div>
-            <h3>Auditable by design</h3>
-            <p>Cycle is open source, so its privacy promises can be checked against the code instead of taken on faith.</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="band compact-band">
-      <div class="not-band">
-        <div class="wrap not-inner">
-          <div>
-            <div class="eyebrow">What you will not find</div>
-            <h2>The list of things<br/>Cycle leaves out.</h2>
-            <p class="sub">Cycle is intentionally small. It leaves out anything that would turn a simple period log into an account, feed, ad product, or data profile.</p>
-          </div>
-          <div class="not-list">
-            <span class="not-item">ads</span>
-            <span class="not-item">analytics</span>
-            <span class="not-item">accounts</span>
-            <span class="not-item">paywalls</span>
-            <span class="not-item">content feeds</span>
-            <span class="not-item">data brokers</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="features" class="band">
-      <div class="wrap">
-        <div class="sec-head">
-          <div class="eyebrow">Quietly capable</div>
-          <h2>Everything you need. Nothing you do not.</h2>
-          <p>A small interface for the core tracking workflow, with optional sync and backup tools when you need them.</p>
         </div>
         <div class="feat-grid">
           <div class="feat">
@@ -506,20 +354,49 @@
       </div>
     </section>
 
+    <section id="privacy" class="band">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="eyebrow">Privacy, by design</div>
+          <h2>Private by default, explicit when synced.</h2>
+          <p>Your history lives on your device. Everything else is opt-in.</p>
+        </div>
+        <div class="pillars">
+          <div class="card">
+            <div class="ic" aria-hidden="true" focusable="false">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="6" y="3.5" width="12" height="17" rx="3" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 17.5h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <h3>On your device</h3>
+            <p>Period history is stored locally on your device. Cycle does not run a backend server that stores your cycle history.</p>
+          </div>
+          <div class="card">
+            <div class="ic" aria-hidden="true" focusable="false">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><rect x="3.5" y="5.5" width="17" height="15" rx="2.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 3v4M16 3v4M3.5 10h17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+            <h3>Your calendar, your rules</h3>
+            <p>Calendar sync is optional. When enabled, Cycle keeps period events in a Google Calendar you control and does not send them to a developer-run server.</p>
+          </div>
+          <div class="card">
+            <div class="ic" aria-hidden="true" focusable="false">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M9 8l-5 4 5 4M15 8l5 4-5 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Auditable by design</h3>
+            <p>Cycle is open source, so its privacy promises can be checked against the code instead of taken on faith.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section id="open-source" class="band compact-band">
       <div class="wrap">
         <div class="os">
           <div class="eyebrow">Free and open source</div>
           <h2>Built in the open.</h2>
           <p>Cycle is free and open source. Found a bug, or wishing it did one more focused thing? The project lives on GitHub, where its privacy claims can be checked against the code.</p>
-          <div class="cta-row" style="justify-content:center;">
-            <a class="btn btn-primary" href="https://github.com/jadeqwang/cycle/issues" target="_blank" rel="noopener">
-              Report a bug or request a feature
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M7 17L17 7M9 7h8v8" stroke="#FFFEFB" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </a>
-            <a class="btn btn-ghost" href="https://github.com/jadeqwang/cycle" target="_blank" rel="noopener">Browse the code</a>
-          </div>
-          <div class="code"><span class="k">$</span> git clone https://github.com/jadeqwang/cycle.git</div>
+          <a class="link-arrow" href="https://github.com/jadeqwang/cycle" target="_blank" rel="noopener" style="margin-top:28px;">
+            Browse the code on GitHub
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
         </div>
       </div>
     </section>
