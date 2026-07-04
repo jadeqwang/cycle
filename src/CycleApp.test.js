@@ -4,6 +4,7 @@ import {
   makeEntry, collectEventIds, autoPeriodLen, parseStoredEntry,
   serializeEntry, buildBackupState, loadStoredState, saveStoredState, mergeImportedPeriods,
   mergeSyncResult, filterClearedTombstones, syncSubtitle,
+  buildDeletedDataState,
 } from './CycleApp.jsx';
 
 const d = (y, m, day) => new Date(y, m - 1, day);
@@ -517,6 +518,38 @@ describe('buildBackupState', () => {
       periodLen: 6,
       periodMode: 'manual',
       calSync: true,
+      dark: true,
+      accent: '#123456',
+      font: 'karla',
+    });
+  });
+});
+
+describe('buildDeletedDataState', () => {
+  test('resets cycle data and sync state while preserving visual preferences', () => {
+    const result = buildDeletedDataState({
+      periods: [entry(d(2026, 7, 2), { startEventId: 'start-id' })],
+      deletedEventIds: ['deleted-id'],
+      lastSyncedAt: '2026-07-07T00:00:00.000Z',
+      cycleLen: 31,
+      cycleMode: 'auto',
+      periodLen: 7,
+      periodMode: 'auto',
+      calSync: true,
+      dark: true,
+      accent: '#123456',
+      font: 'karla',
+    });
+
+    expect(result).toEqual({
+      periods: [],
+      deletedEventIds: [],
+      lastSyncedAt: null,
+      cycleLen: 27,
+      cycleMode: 'manual',
+      periodLen: 5,
+      periodMode: 'manual',
+      calSync: false,
       dark: true,
       accent: '#123456',
       font: 'karla',

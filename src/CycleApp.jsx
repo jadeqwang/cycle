@@ -243,6 +243,22 @@ function buildBackupState(state) {
   };
 }
 
+function buildDeletedDataState(state = {}) {
+  return {
+    periods: [],
+    deletedEventIds: [],
+    lastSyncedAt: null,
+    cycleLen: 27,
+    cycleMode: 'manual',
+    periodLen: 5,
+    periodMode: 'manual',
+    calSync: false,
+    dark: !!state.dark,
+    accent: state.accent || '#C4928A',
+    font: state.font || 'quicksand',
+  };
+}
+
 function mergeIdField(currentId, incomingId, newerIncoming) {
   if (currentId === null || currentId === undefined) return incomingId;
   if (incomingId === null || incomingId === undefined) return currentId;
@@ -604,6 +620,7 @@ function SettingsSheet({
   onSignOut,
   onExport,
   onImportOpen,
+  onDeleteAllData,
 }) {
   const syncText = syncSubtitle({ native, connected, syncStatus, lastSyncedAt });
   return (
@@ -731,6 +748,19 @@ function SettingsSheet({
               <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>Paste a JSON backup</div>
             </div>
             <ChevronRight c={c.textFaint} s={18}/>
+          </button>
+
+          <button onClick={onDeleteAllData} style={{
+            width: '100%', textAlign: 'left',
+            background: 'transparent', border: 'none', padding: '18px 0',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer',
+            borderBottom: `1px solid ${c.hairline}`,
+          }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 15, fontWeight: 500, color: c.accentDeep }}>Delete all data</div>
+              <div style={{ fontFamily: 'var(--font-ui)', fontSize: 13, color: c.textSecondary, marginTop: 2 }}>Clear local records and disconnect sync</div>
+            </div>
+            <Trash c={c.accentDeep} s={18}/>
           </button>
 
           <div style={{ padding: '20px 0 8px', textAlign: 'center' }}>
@@ -1033,6 +1063,7 @@ function CycleApp({
   const retryCount = useRef(0);
   const periodsRef = useRef(periods);
   const deletedEventIdsRef = useRef(deletedEventIds);
+  const syncGeneration = useRef(0);
   periodsRef.current = periods;
   deletedEventIdsRef.current = deletedEventIds;
 
@@ -1066,6 +1097,7 @@ function CycleApp({
     syncPending.current = false;
     clearSyncTimers();
     setSyncStatus('syncing');
+    const generation = syncGeneration.current;
     const snapshot = periodsRef.current.map(serializeEntry);
     const snapshotByStart = new Map(snapshot.map(entry => [entry.start, entry]));
     try {
@@ -1073,6 +1105,7 @@ function CycleApp({
         periods: snapshot,
         deletedEventIds: deletedEventIdsRef.current,
       });
+      if (generation !== syncGeneration.current) return;
       const parsedPeriods = result.periods.map(parseStoredEntry).filter(Boolean);
       setPeriods(prev => mergeSyncResult(prev, snapshotByStart, parsedPeriods));
       setDeletedEventIds(ids => filterClearedTombstones(ids, result.clearedTombstones));
@@ -1080,6 +1113,7 @@ function CycleApp({
       retryCount.current = 0;
       setSyncStatus('idle');
     } catch (error) {
+      if (generation !== syncGeneration.current) return;
       if (error instanceof AuthRequired) {
         setSyncStatus('auth');
         setConnected(false);
@@ -1094,7 +1128,7 @@ function CycleApp({
       }
     } finally {
       syncBusy.current = false;
-      if (syncPending.current) {
+      if (generation === syncGeneration.current && syncPending.current) {
         syncPending.current = false;
         doSync();
       }
@@ -1136,10 +1170,40 @@ function CycleApp({
   }, [native]);
 
   const handleSignOut = useCallback(async () => {
+    syncGeneration.current += 1;
     await signOut().catch(() => {});
     setConnected(false);
     setSyncStatus('idle');
   }, []);
+
+  const handleDeleteAllData = useCallback(async () => {
+    const confirmed = window.confirm(
+      'Delete all Cycle data from this device? This clears local period records, sync history, and Google sign-in tokens. Existing Google Calendar events are not deleted; remove them in Google Calendar if you want them gone.',
+    );
+    if (!confirmed) return;
+
+    const next = buildDeletedDataState({ dark, accent, font });
+    syncGeneration.current += 1;
+    clearSyncTimers();
+    syncPending.current = false;
+    retryCount.current = 0;
+    setPeriods(next.periods);
+    setDeletedEventIds(next.deletedEventIds);
+    setLastSyncedAt(next.lastSyncedAt);
+    setCycleLen(next.cycleLen);
+    setCycleMode(next.cycleMode);
+    setPeriodLen(next.periodLen);
+    setPeriodMode(next.periodMode);
+    setConnected(next.calSync);
+    setSyncStatus('idle');
+    setSignInError(false);
+    setLogOffset(0);
+    setBloom(null);
+    setImportOpen(false);
+    setEditIndex(null);
+    setSettingsOpen(false);
+    await signOut().catch(() => {});
+  }, [accent, clearSyncTimers, dark, font]);
 
   // auto-compute cycle len when in auto mode
   useEffect(() => {
@@ -1357,6 +1421,7 @@ function CycleApp({
         onSignOut={handleSignOut}
         onExport={handleExport}
         onImportOpen={() => { setSettingsOpen(false); setImportOpen(true); }}
+        onDeleteAllData={handleDeleteAllData}
       />
 
       <ImportModal c={c} open={importOpen} onClose={() => setImportOpen(false)}
@@ -1385,6 +1450,6 @@ export {
   LIGHT, DARK, loadStoredState, saveStoredState, makeEntry, hasPeriodOn,
   addPeriodEntry, setPeriodDate, setPeriodEnd, removePeriodAt, collectEventIds,
   autoPeriodLen, parseStoredEntry, serializeEntry,
-  buildBackupState, mergeImportedPeriods, mergeSyncResult, filterClearedTombstones, syncSubtitle,
+  buildBackupState, buildDeletedDataState, mergeImportedPeriods, mergeSyncResult, filterClearedTombstones, syncSubtitle,
 };
 export default CycleApp;
