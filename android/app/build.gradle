@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+def releaseStoreFile = project.findProperty('CYCLE_RELEASE_STORE_FILE') ?: System.getenv('CYCLE_RELEASE_STORE_FILE')
+def releaseStorePassword = project.findProperty('CYCLE_RELEASE_STORE_PASSWORD') ?: System.getenv('CYCLE_RELEASE_STORE_PASSWORD')
+def releaseKeyAlias = project.findProperty('CYCLE_RELEASE_KEY_ALIAS') ?: System.getenv('CYCLE_RELEASE_KEY_ALIAS')
+def releaseKeyPassword = project.findProperty('CYCLE_RELEASE_KEY_PASSWORD') ?: System.getenv('CYCLE_RELEASE_KEY_PASSWORD')
+def hasReleaseSigning = releaseStoreFile && releaseStorePassword && releaseKeyAlias && releaseKeyPassword
+
 android {
     namespace = "com.jade.cycle"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -17,8 +23,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (hasReleaseSigning) {
+                storeFile file(releaseStoreFile)
+                storePassword releaseStorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig hasReleaseSigning ? signingConfigs.release : null
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
